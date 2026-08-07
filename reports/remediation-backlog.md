@@ -96,17 +96,17 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 | SI-CONV-001 | Function implemented separately in both ECC systems | critical | 10 |
 | SI-QM-001 | Batch master table read directly | major | 10 |
 | SI-FI-001 | FI index or totals table accessed directly | blocker | 9 |
-| SI-MD-001 | Customer or vendor master written outside Business Partner | blocker | 6 |
 | SI-CO-001 | CO totals or line item table accessed directly | blocker | 6 |
-| SI-SD-002 | Classic SD credit management objects used | critical | 6 |
+| SI-MD-001 | Customer or vendor master written outside Business Partner | blocker | 6 |
 | SI-PP-001 | Classic MRP list tables accessed | critical | 6 |
+| SI-SD-002 | Classic SD credit management objects used | critical | 6 |
 | SI-MM-001 | Aggregate stock table accessed directly | blocker | 5 |
-| SI-TECH-007 | COMMIT WORK inside a loop | major | 5 |
 | SI-SD-001 | Sales document status tables VBUK/VBUP accessed | blocker | 5 |
-| SI-TECH-002 | Obsolete function module called | critical | 4 |
-| SI-TECH-001 | Native SQL used | blocker | 4 |
+| SI-TECH-007 | COMMIT WORK inside a loop | major | 5 |
 | SI-FI-002 | BSEG/BKPF read where the universal journal should be used | major | 4 |
 | SI-OM-001 | NAST based output determination used | critical | 4 |
+| SI-TECH-001 | Native SQL used | blocker | 4 |
+| SI-TECH-002 | Obsolete function module called | critical | 4 |
 | SI-TECH-006 | CLIENT SPECIFIED used | major | 2 |
 
 ## Prioritised backlog

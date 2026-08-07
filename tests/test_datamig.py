@@ -649,6 +649,32 @@ def test_held_stock_names_the_rule_that_actually_held_the_material():
     assert "DQ-MAT-010" not in held[0].message
 
 
+def test_a_merge_onto_a_collided_survivor_says_so():
+    """The survivor is missing because two products claim its number.
+
+    "Correct the surviving master" is the wrong instruction: there is
+    nothing wrong with it, and the steward cannot make it load. The
+    collision has to be settled first, and the exception has to say
+    which of the two problems it is.
+    """
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100249", "CORE ANTIGEN"),
+            _material("GVP", "000000000000100249", "SOMETHING UNRELATED"),
+            _material("GVP", "000000000000100801", "VACCINES ANTIGEN"),
+        ],
+        harmonisation_targets={("GVP", "000000000000100801"): "100249"},
+    )
+    orphaned = outcome.issues_for("DQ-MAT-010")
+    assert len(orphaned) == 1
+    assert "DQ-MAT-009" in orphaned[0].message
+    assert "correct the surviving master" not in orphaned[0].message
+    # And the stock cascade quotes the collision rather than sending a
+    # steward to a master that is fine.
+    hold = outcome.harmonisation_holds["GVP/100801"]
+    assert hold.rule == "DQ-MAT-009"
+
+
 def test_a_merge_into_a_retired_material_is_refused():
     """A -> B -> C asks the pipeline to infer that A means C.
 

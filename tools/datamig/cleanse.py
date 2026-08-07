@@ -467,6 +467,10 @@ def _reject_orphaned_merges(
         strip_leading_zeros(material)
         for _, material in harmonisation_targets
     }
+    # Numbers the collision rule is already holding. It ran first, so a
+    # survivor it took out is missing for a reason the steward can act
+    # on, and one it cannot reach by correcting the master.
+    collided = {hold.split("/", 1)[1] for hold in result.collision_holds}
 
     for row in orphaned:
         target = harmonisation_targets[_row_key(row)]
@@ -484,6 +488,25 @@ def _reject_orphaned_merges(
                        "decision itself retires; a chain leaves the "
                        "pipeline to decide what this material really "
                        "became, so name the surviving product directly")
+            )
+            continue
+        # After the chain test: a decision naming a target that another
+        # decision retires is wrong wherever the number also collides,
+        # and saying so is the fix. A collision is not the record's
+        # fault and cannot be answered on the surviving master.
+        if target in collided:
+            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+                target_product=target,
+                rule="DQ-MAT-009",
+                reason="whose number is claimed by two products",
+            )
+            result.issues.append(
+                _issue("DQ-MAT-010", Action.REJECT, "materials",
+                       source_key(row, "MATNR"), "MATNR",
+                       f"harmonised into product {target}, which is held back "
+                       "because two products claim that number (DQ-MAT-009); "
+                       "nothing on this record or on the surviving master is "
+                       "wrong, and neither loads until that is settled")
             )
             continue
         result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(

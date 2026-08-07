@@ -250,7 +250,11 @@ def count_by_rule(objects: list[ObjectResult]) -> dict[str, int]:
     for obj in objects:
         for finding in obj.findings:
             counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
-    return dict(sorted(counts.items(), key=lambda item: -item[1]))
+    # Rule id breaks the tie. On count alone the order of equal rules
+    # follows the order the files were walked, so adding an unrelated
+    # source file reshuffles the table and fails the staleness gate
+    # with a diff that says nothing.
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
 
 def to_markdown(result: ScanResult) -> str:

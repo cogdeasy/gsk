@@ -18,6 +18,8 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .identity import material_key
+
 # Source system -> sub-folder in the wave extract directory.
 SOURCE_SYSTEMS = {
     "GEP": "gep",
@@ -202,7 +204,12 @@ def _validate_harmonisation(
                 "is to be merged but names no surviving product; without "
                 "one the record has nowhere to land"
             )
-        key = (decision.source_system, decision.material.lstrip("0") or "0")
+        # The same key the rest of the pipeline decides with. Spelling
+        # the padding rule out here again is how the two halves of a
+        # decision drifted apart before, and a guard that disagrees
+        # with the code applying the decisions lets file order pick
+        # the survivor.
+        key = material_key(decision.source_system, decision.material)
         if key in seen:
             raise ExtractError(
                 f"{file_path}: {decision.source_system}/{decision.material} "
