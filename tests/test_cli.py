@@ -13,6 +13,20 @@ def _run_from_repo_root(monkeypatch):
     monkeypatch.chdir(REPO_ROOT)
 
 
+def _group_count(output: str) -> int:
+    """The convergence groups a scan reports, read off its summary.
+
+    Read rather than asserted: `AGENTS.md` keeps tests off estate
+    totals, because those move whenever the inventory does. What the
+    tests below compare is one scan's count against another's.
+    """
+    line = next(
+        line for line in output.splitlines()
+        if line.startswith("convergence groups")
+    )
+    return int(line.split(":", 1)[1].split()[0])
+
+
 def test_s4scan_rules_command_lists_the_catalogue(capsys):
     assert s4scan_cli.main(["rules"]) == 0
     output = capsys.readouterr().out
@@ -88,9 +102,11 @@ def test_a_single_system_view_still_prices_the_duplication(capsys):
     s4scan_cli.main(["scan", "abap/ecc", "--system", "GVP"])
     vaccines_only = capsys.readouterr().out
 
-    groups = "convergence groups    : 4"
-    assert groups in both
-    assert groups in vaccines_only
+    # The same groups, not a fixed number of them: how many the estate
+    # holds moves with the inventory, and pinning it would break this
+    # test for a change it is not about.
+    assert _group_count(vaccines_only) == _group_count(both)
+    assert _group_count(both) > 0
     # The days belong to the group, not to the system looking at it.
     assert "not this view's" in vaccines_only
     assert "not this view's" not in both
@@ -103,13 +119,19 @@ def test_a_wave_view_prices_only_its_own_groups(capsys):
     still span, --wave narrows the estate itself: the group is planned
     and delivered as one piece of work within a wave.
     """
+    s4scan_cli.main(["scan", "abap/ecc"])
+    every_wave = capsys.readouterr().out
     s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0"])
     wave0 = capsys.readouterr().out
     s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave1"])
     wave1 = capsys.readouterr().out
 
-    assert "convergence groups    : 3" in wave0
-    assert "convergence groups    : 1" in wave1
+    # Each wave holds some of the groups and the waves together hold
+    # all of them - a group belongs to exactly one wave, which the
+    # inventory enforces and this asserts without counting anything.
+    assert 0 < _group_count(wave0) < _group_count(every_wave)
+    assert 0 < _group_count(wave1) < _group_count(every_wave)
+    assert _group_count(wave0) + _group_count(wave1) == _group_count(every_wave)
     assert "not this view's" not in wave0
 
 
@@ -126,8 +148,8 @@ def test_narrowing_a_wave_within_a_system_view_keeps_the_view(capsys):
     s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0"])
     wave0 = capsys.readouterr().out
 
-    assert "convergence groups    : 3" in filtered
-    assert "convergence groups    : 3" in wave0
+    assert _group_count(filtered) == _group_count(wave0)
+    assert _group_count(filtered) > 0
     assert "not this view's" in filtered
 
 

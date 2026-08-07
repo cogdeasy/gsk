@@ -723,6 +723,34 @@ def test_a_target_retired_by_the_other_system_is_still_a_chain():
     assert not outcome.issues_for("DQ-MAT-010")
 
 
+def test_a_master_record_held_twice_is_not_saved_by_a_decision():
+    """A decision names the key once; the extract holds it twice.
+
+    Excluding decided records from the collision rule is right - they
+    are merged away and never claim the number - but with two records
+    under one key mapping writes one cross reference over the other and
+    a master disappears with nothing raised. MARA cannot hold MATNR
+    twice, so the extract is what is wrong, and it must be said.
+    """
+    targets = {("GEP", "000000000000100801"): "100236"}
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GEP", "000000000000100801", "SOMETHING ELSE ENTIRELY"),
+            _material("GEP", "000000000000100236", "CORE ANTIGEN"),
+        ],
+        harmonisation_targets=targets,
+    )
+    collisions = outcome.issues_for("DQ-MAT-009")
+    assert len(collisions) == 1
+    assert "the decision table names it once" in collisions[0].message
+    # Neither record loads, and neither is counted twice.
+    assert [row["MATNR"] for row in outcome.accepted] == [
+        "000000000000100236"
+    ]
+    assert len(outcome.rejected) == 2
+
+
 def test_two_materials_without_a_description_are_not_duplicates():
     """An exception naming '' is one nobody can act on or close."""
     outcome = cleanse.cleanse_materials(

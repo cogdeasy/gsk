@@ -357,9 +357,17 @@ def _reject_undecided_collisions(
     accepted = {id(row) for row in result.accepted}
 
     for number, rows in numbers.items():
+        # A decided record is out of scope: it is being merged away and
+        # never claims the number. Unless the extract holds it twice -
+        # ECC cannot, MARA is keyed on MATNR, so an extract that does is
+        # broken. The decision names the key once and cannot say which
+        # of the two records it meant, and mapping would write one
+        # cross-reference entry over the other with nothing said.
+        repeated = Counter(_row_key(row) for row in rows)
         undecided = [
             row for row in rows
             if _row_key(row) not in harmonisation_targets
+            or repeated[_row_key(row)] > 1
         ]
         # Two rows landing on one product number, wherever they came
         # from. Requiring two systems would miss a number repeated
@@ -378,7 +386,14 @@ def _reject_undecided_collisions(
         # the target product number is the bare MATNR and only one
         # record can have it. But saying no decision exists when one
         # does sends a steward to make it a second time.
-        if any(_row_key(row) in (ruled_separate or set()) for row in undecided):
+        if any(_row_key(row) in harmonisation_targets for row in undecided):
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products while the decision table names it once; which "
+                "record the merge was for cannot be told from the "
+                "extract, and the other would be written over by it"
+            )
+        elif any(_row_key(row) in (ruled_separate or set()) for row in undecided):
             message = (
                 f"material number {number} is used {scope} for different "
                 "products, and the decision table rules them separate "
