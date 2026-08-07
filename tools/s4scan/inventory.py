@@ -24,6 +24,11 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+
+class InventoryError(RuntimeError):
+    """Raised when the estate inventory contradicts itself."""
+
+
 SOURCE_SYSTEMS = {
     "GEP": "GSK core ECC 6.0",
     "GVP": "GSK Vaccines ECC 6.0",
@@ -126,7 +131,31 @@ class Inventory:
                         remediated_path=(row.get("remediated_path") or "").strip(),
                     )
                 )
-        return cls(entries)
+        inventory = cls(entries)
+        inventory._check_groups_are_wave_aligned(path)
+        return inventory
+
+    def _check_groups_are_wave_aligned(self, path: str | Path) -> None:
+        """A convergence group is delivered as one piece of work.
+
+        `--wave` narrows the estate on the strength of that, so a group
+        split across two waves would vanish from the convergence
+        backlog of each while `SI-CONV-001` still fired on the visible
+        member - the report flagging an object as duplicated and
+        stating that no duplication exists.
+        """
+        waves: dict[str, set[str]] = {}
+        for entry in self._entries:
+            if entry.convergence_group:
+                waves.setdefault(entry.convergence_group, set()).add(entry.wave)
+        for group_id, group_waves in sorted(waves.items()):
+            if len(group_waves) > 1:
+                raise InventoryError(
+                    f"{path}: convergence group {group_id} spans "
+                    f"{', '.join(sorted(group_waves))}; a group is planned "
+                    "and delivered as one piece of work, so its members "
+                    "belong in one wave"
+                )
 
     def __len__(self) -> int:
         return len(self._entries)

@@ -27,6 +27,11 @@ from .identity import (
     strip_leading_zeros,
 )
 
+
+class MappingError(RuntimeError):
+    """Raised when mapping is handed data cleansing should have held."""
+
+
 BP_NUMBER_START = 1000000
 BP_GROUPING = "BPGS"
 
@@ -120,11 +125,23 @@ def convert_to_products(
             result.merged_materials.append((row["SOURCE_SYSTEM"], row["MATNR"]))
             continue
 
-        if product not in by_product:
-            mapped = map_material(row)
-            mapped["Product"] = product
-            by_product[product] = mapped
-            result.products.append(mapped)
+        # Cleansing holds back every undecided collision (DQ-MAT-009),
+        # so a second record landing on a product number that is
+        # already loaded cannot happen. Keeping the first and skipping
+        # the second silently is what this used to do, and it loses a
+        # master record with no reject to explain it - the one thing
+        # the pipeline must never do.
+        if product in by_product:
+            raise MappingError(
+                f"{source_key(row, 'MATNR')} maps to product {product}, "
+                f"already loaded from {by_product[product]['SourceSystem']}; "
+                "cleansing should have held both back under DQ-MAT-009"
+            )
+
+        mapped = map_material(row)
+        mapped["Product"] = product
+        by_product[product] = mapped
+        result.products.append(mapped)
 
     return result
 

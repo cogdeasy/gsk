@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from s4scan import report
-from s4scan.inventory import Inventory
+from s4scan.inventory import Inventory, InventoryError
 from s4scan.rules import RuleFilter, Severity
 from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
 
@@ -14,6 +16,25 @@ INVENTORY = REPO_ROOT / "estate" / "inventory.csv"
 
 def load_inventory() -> Inventory:
     return Inventory.load(INVENTORY)
+
+
+def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
+    """`--wave` narrows the estate, so a split group would vanish.
+
+    Both wave views would drop the group from the convergence backlog
+    while SI-CONV-001 still fired on the member each could see - the
+    report calling an object duplicated and denying the duplication in
+    the same breath.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    members = [index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row]
+    assert len(members) > 1
+    rows[members[0]] = rows[members[0]].replace(",wave0,", ",wave1,")
+    split = tmp_path / "inventory.csv"
+    split.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(InventoryError, match="CG-MM-STOCK spans"):
+        Inventory.load(split)
 
 
 def test_object_name_is_derived_from_the_file_name():

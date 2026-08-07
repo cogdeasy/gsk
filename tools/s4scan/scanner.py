@@ -395,7 +395,7 @@ def _apply_object_rules(
                     ),
                 )
             )
-        if rule.id == "SI-GXP-001":
+        elif rule.id == "SI-GXP-001":
             if result.entry is None or not result.entry.is_gxp:
                 continue
             if has_test_class(file_path, test_roots):

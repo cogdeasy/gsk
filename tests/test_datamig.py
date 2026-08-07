@@ -224,10 +224,16 @@ def test_a_decision_naming_a_product_in_neither_system_fails_the_wave(tmp_path):
     """
     source = tmp_path / "wave0"
     shutil.copytree(WAVE0, source)
-    with open(source / extract.HARMONISATION_FILE, "a", encoding="utf-8") as handle:
-        handle.write(
-            "GVP,000000000000700310,999999,merge,Survivor is in neither system\n"
-        )
+    # Repointed, not appended: a second row for the same material is a
+    # different defect, and the extract now refuses it outright.
+    table = source / extract.HARMONISATION_FILE
+    table.write_text(
+        table.read_text(encoding="utf-8").replace(
+            "GVP,000000000000700310,100244,merge,",
+            "GVP,000000000000700310,999999,merge,",
+        ),
+        encoding="utf-8",
+    )
 
     outcome = pipeline.run(
         wave="wave0", source_dir=source, out_dir=tmp_path / "out", write_files=False
@@ -354,6 +360,78 @@ def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     assert not check.passed
 
 
+def test_two_decisions_for_one_material_are_refused(tmp_path):
+    """File order must not decide which survivor a steward signed off."""
+    table = tmp_path / extract.HARMONISATION_FILE
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVP,000000000000700301,100251,merge,First\n"
+        "GVP,000000000000700301,100999,merge,Second\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(extract.ExtractError, match="more than one decision"):
+        extract.read_harmonisation(table)
+
+
+def test_a_merge_into_a_retired_material_is_refused(tmp_path):
+    """A -> B -> C asks the pipeline to infer that A means C."""
+    table = tmp_path / extract.HARMONISATION_FILE
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVP,000000000000700301,700302,merge,Into a material that is itself merged\n"
+        "GVP,000000000000700302,100236,merge,Into the core record\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(extract.ExtractError, match="itself retired"):
+        extract.read_harmonisation(table)
+
+
+def test_differently_padded_numbers_are_the_same_collision():
+    """The collision is on the number the product loads under.
+
+    Only the padding differs between these two, and the target product
+    number is the bare MATNR, so both would land on product 100801 and
+    the mapping would keep whichever it saw first.
+    """
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GVP", "100801", "ANTIGEN BULK RSV"),
+        ]
+    )
+    assert len(outcome.issues_for("DQ-MAT-009")) == 1
+    assert outcome.accepted == []
+
+
+def test_a_number_repeated_within_one_extract_is_a_collision():
+    """One system is enough: both rows still land on one product."""
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GVP", "000000000000700401", "ANTIGEN BULK A"),
+            _material("GVP", "000000000000700401", "ANTIGEN BULK B"),
+        ]
+    )
+    collisions = outcome.issues_for("DQ-MAT-009")
+    assert len(collisions) == 1
+    assert "more than once within GVP" in collisions[0].message
+    assert outcome.accepted == []
+
+
+def test_mapping_refuses_to_drop_a_second_record_for_one_product():
+    """Cleansing should have held these; mapping must not paper over it.
+
+    Skipping the second record loses a master with no reject naming it,
+    which is the one outcome the pipeline is not allowed to produce.
+    """
+    harmonisation = mapping.ProductHarmonisation([])
+    rows = [
+        _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+        _material("GVP", "000000000000100801", "ANTIGEN BULK RSV"),
+    ]
+    with pytest.raises(mapping.MappingError, match="DQ-MAT-009"):
+        mapping.convert_to_products(rows, harmonisation)
+
+
 def test_a_collision_is_reported_even_if_one_side_is_rejected():
     """The collision is a fact about the extracts, not about cleansing.
 
@@ -373,10 +451,14 @@ def test_a_collision_is_reported_even_if_one_side_is_rejected():
     assert "GEP/000000000000100801" in collisions[0].key
     assert "GVP/000000000000100801" in collisions[0].key
     # The surviving side is held; the other is already out on its own
-    # reject and must not be counted as rejected twice.
+    # reject and must not be counted as rejected twice. Both are named
+    # as holds, because stock hangs off either one.
     assert outcome.accepted == []
     assert len(outcome.rejected) == 2
-    assert outcome.collision_holds == {"GEP/000000000000100801"}
+    assert outcome.collision_holds == {
+        "GEP/000000000000100801",
+        "GVP/000000000000100801",
+    }
 
 
 def test_stock_stranded_by_a_number_collision_says_so():

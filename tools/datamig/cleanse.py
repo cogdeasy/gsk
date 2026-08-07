@@ -181,13 +181,18 @@ def cleanse_materials(
             row["MAKTX"] = row["MAKTX"].upper()
 
         descriptions[row["MAKTX"]].append(key)
+        # Keyed on the number the material would load under, not the
+        # one it was extracted with: the target product number is the
+        # bare MATNR, so 100801 and 000000000000100801 are the same
+        # product and only differ in how each system padded them.
+        #
         # Every extracted row, accepted or not. A collision is a fact
         # about the two extracts, not about how cleansing happened to
         # treat them: recording only accepted rows would let the
         # survivor load under the bare number whenever the other side
         # was rejected for something unrelated, which is exactly what
         # DQ-MAT-009 exists to stop.
-        numbers[row["MATNR"]].append(row)
+        numbers[strip_leading_zeros(row["MATNR"])].append(row)
 
         if reject:
             result.rejected.append(row)
@@ -231,6 +236,7 @@ def _reject_undecided_collisions(
     decision, so both wait for one.
     """
     colliding: list[dict[str, str]] = []
+    held: set[str] = set()
     accepted = {source_key(row, "MATNR") for row in result.accepted}
 
     for number, rows in numbers.items():
@@ -238,10 +244,19 @@ def _reject_undecided_collisions(
             row for row in rows
             if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
         ]
-        systems = {row["SOURCE_SYSTEM"] for row in undecided}
-        if len(systems) < 2:
+        # Two rows landing on one product number, wherever they came
+        # from. Requiring two systems would miss a number repeated
+        # within one extract, which lands on the same product just as
+        # squarely and is dropped just as silently.
+        if len(undecided) < 2:
             continue
+        systems = {row["SOURCE_SYSTEM"] for row in undecided}
+        scope = (
+            "in both source systems" if len(systems) > 1
+            else f"more than once within {next(iter(systems))}"
+        )
         keys = ", ".join(source_key(row, "MATNR") for row in undecided)
+        held.update(source_key(row, "MATNR") for row in undecided)
         # Only what is still in the load can be held back; a row another
         # rule already rejected is named in the message and left where
         # it is, so it is not counted as rejected twice.
@@ -251,11 +266,16 @@ def _reject_undecided_collisions(
         )
         result.issues.append(
             _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR",
-                   f"material number {number} is used in both source systems "
-                   "for different products and no harmonisation decision "
-                   "nominates a survivor; the target product number cannot "
-                   "be carried over from either")
+                   f"material number {number} is used {scope} for different "
+                   "products and no harmonisation decision nominates a "
+                   "survivor; the target product number cannot be carried "
+                   "over from either")
         )
+
+    # Every side of every collision, including one already rejected by
+    # another rule. Stock hanging off that side is stranded for the
+    # same reason and needs the same explanation.
+    result.collision_holds.update(held)
 
     if not colliding:
         return
@@ -266,7 +286,6 @@ def _reject_undecided_collisions(
         if source_key(row, "MATNR") not in rejected
     ]
     result.rejected.extend(colliding)
-    result.collision_holds.update(rejected)
 
 
 def _reject_orphaned_merges(
