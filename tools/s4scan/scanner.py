@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import parser
-from .inventory import RETAIN, Inventory, InventoryEntry
+from .inventory import RETAIN, Inventory, InventoryEntry, is_a_duplication
 from .rules import OBJECT_RULES, RULES, Rule, RuleFilter, Severity
 
 ABAP_SUFFIXES = (".abap",)
@@ -130,7 +130,17 @@ class ConvergenceGroup:
 
     @property
     def is_cross_system(self) -> bool:
-        return len(self.source_systems) > 1
+        """Whether the group is a duplication across the two systems.
+
+        Deliberately the same rule as `Inventory.is_cross_system_group`,
+        and it has to stay the same rule: that one gates SI-CONV-001
+        and this one gates whether the group is reported at all, so a
+        divergence leaves the finding on an object whose group appears
+        in no table.
+        """
+        return is_a_duplication(
+            [(obj.source_system, obj.is_decommissioned) for obj in self.objects]
+        )
 
     @property
     def is_decommissioned(self) -> bool:

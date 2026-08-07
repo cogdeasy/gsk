@@ -349,6 +349,14 @@
       "target_value": "33000.000",
       "status": "PASS",
       "note": ""
+    },
+    {
+      "id": "REC-STK-KEY",
+      "description": "initial stock is unique on the S/4HANA key",
+      "source_value": "21 rows",
+      "target_value": "21 distinct product/plant/sloc/batch",
+      "status": "PASS",
+      "note": ""
     }
   ]
 }

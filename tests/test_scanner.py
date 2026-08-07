@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from s4scan import report
-from s4scan.inventory import Inventory, InventoryError
+from s4scan.inventory import Inventory, InventoryError, is_a_duplication
 from s4scan.rules import RuleFilter, Severity
 from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
 
@@ -55,6 +55,35 @@ def test_a_counterpart_being_switched_off_is_not_a_duplication(tmp_path):
 
     assert not Inventory.load(mixed).is_cross_system_group("CG-MM-STOCK")
     assert Inventory.load(INVENTORY).is_cross_system_group("CG-MM-STOCK")
+
+
+def test_the_two_duplication_predicates_agree():
+    """One rule, two callers.
+
+    The inventory answer gates SI-CONV-001 and the scanner answer gates
+    whether the group is reported at all, so they cannot be allowed to
+    drift: a group that is a duplication to one and not to the other
+    leaves a finding on an object whose group appears in no table.
+    """
+    inventory = load_inventory()
+    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    groups = {group.group_id: group for group in result.convergence_groups()}
+    assert groups
+
+    for group_id in {
+        entry.convergence_group
+        for entry in inventory.entries
+        if entry.convergence_group
+    }:
+        assert inventory.is_cross_system_group(group_id) == (group_id in groups)
+
+
+def test_a_pair_that_both_sides_switch_off_is_still_a_duplication():
+    """It is why the interface disappears - that saving is the point."""
+    assert is_a_duplication([("GEP", True), ("GVP", True)])
+    assert not is_a_duplication([("GEP", False), ("GVP", True)])
+    assert not is_a_duplication([("GEP", False), ("GEP", False)])
+    assert is_a_duplication([("GEP", False), ("GVP", False)])
 
 
 def test_object_name_is_derived_from_the_file_name():

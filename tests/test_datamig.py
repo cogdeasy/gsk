@@ -780,6 +780,43 @@ def test_stock_on_the_wrong_merged_product_is_caught(tmp_path, monkeypatch):
     }
 
 
+def test_two_systems_supplying_one_batch_is_caught(result):
+    """The count key carries SourceSystem; the S/4HANA key does not.
+
+    Two rows the target cannot tell apart would balance every count
+    check, because both sides carry the qualifier that keeps them
+    distinct.
+    """
+    from datamig import reconcile
+
+    collided = [dict(row) for row in result.stock]
+    collided[1].update(
+        {
+            "SourceSystem": "GVP",
+            "Product": collided[0]["Product"],
+            "Plant": collided[0]["Plant"],
+            "StorageLocation": collided[0]["StorageLocation"],
+            "Batch": collided[0]["Batch"],
+        }
+    )
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=result.reconciliation.counts,
+        accepted_open_items=result.cleansing["open_items"].accepted,
+        loaded_open_items=result.open_items,
+        accepted_stock=result.cleansing["batch_stock"].accepted,
+        loaded_stock=collided,
+        accepted_partners=len(result.cleansing["customers"].accepted)
+        + len(result.cleansing["vendors"].accepted),
+        partner_identities=len(result.business_partners.partners),
+        business_partners=len(result.business_partners.partners),
+        merged_partners=result.business_partners.merged_count,
+        xref=result.business_partners.xref,
+    )
+    assert "REC-STK-KEY" in {check.id for check in broken.failed_checks}
+
+
 def test_the_printed_record_arithmetic_is_checked(result):
     """The report asserts extracted - rejected - merged = loaded."""
     from datamig import reconcile

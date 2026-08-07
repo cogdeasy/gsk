@@ -211,7 +211,7 @@ number and quietly splitting the product's stock in two.
 cat reports/wave0/reconciliation.md
 ```
 
-35 checks, all passing: counts, value totals per company code and
+36 checks, all passing: counts, value totals per company code and
 currency, debit/credit balance, quantity totals per plant, BP
 arithmetic, and the merge arithmetic (`REC-MRG-*`). That last group
 matters here - with two sources loading into one client, a smaller

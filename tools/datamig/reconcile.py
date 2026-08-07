@@ -459,6 +459,34 @@ def build(
             )
         )
 
+    # The count check keys stock by source system so a batch cannot be
+    # lost in the merge, but the target system has no such column: the
+    # real key of initial stock is product, plant, storage location and
+    # batch. If both systems ever supplied the same batch on the same
+    # harmonised product, the count check would still balance and the
+    # load would carry two rows the target cannot tell apart.
+    target_keys = [
+        "/".join(
+            (row["Product"], row["Plant"], row["StorageLocation"], row["Batch"])
+        )
+        for row in loaded_stock
+    ]
+    duplicated = sorted({key for key in target_keys if target_keys.count(key) > 1})
+    reconciliation.checks.append(
+        Check(
+            id="REC-STK-KEY",
+            description="initial stock is unique on the S/4HANA key",
+            source_value=f"{len(target_keys)} rows",
+            target_value=f"{len(set(target_keys))} distinct product/plant/sloc/batch",
+            passed=not duplicated,
+            note=(
+                f"{len(duplicated)} collide after the merge: {_sample(duplicated)}"
+                if duplicated
+                else ""
+            ),
+        )
+    )
+
     return reconciliation
 
 

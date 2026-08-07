@@ -189,10 +189,19 @@ outcome - which is also exactly what data loss looks like. So:
 | `REC-MRG-003` | every harmonised material resolves to a product that is actually in the load |
 | `REC-MRG-004` | every harmonisation decision was applied, or the material it names was rejected |
 | `REC-ARI-*` | the record-count table's own arithmetic: extracted - rejected - merged = loaded |
+| `REC-STK-KEY` | initial stock is unique on the real S/4HANA key, which has no source system column |
 
 `REC-ARI-*` exists because the report prints that identity under the
 count table. Printed and unchecked, it is a claim about the load file
 rather than evidence about it.
+
+`REC-STK-KEY` exists because every count check keys stock by source
+system, which is the right ECC-side key and not a column the target
+has. Two systems supplying the same batch on the same harmonised
+product and plant would balance every count and still load two rows
+S/4HANA cannot tell apart. Today the plants are disjoint, so the
+question does not arise - which is exactly why it needs a check rather
+than an assumption.
 
 The reconciliation report also breaks accepted records down by source
 system, so each side can see its own contribution to the merged total.

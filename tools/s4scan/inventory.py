@@ -38,6 +38,29 @@ RETAIN = "retain"
 CONVERGE = "converge"
 DECOMMISSION = "decommission"
 
+
+def is_a_duplication(members: list[tuple[str, bool]]) -> bool:
+    """Whether a convergence group is two implementations of one thing.
+
+    ``members`` is (source system, is decommissioned) per member. Two
+    callers need this answer - the scanner, to decide whether to report
+    the group at all, and SI-CONV-001, to decide whether to flag the
+    objects - and they have to give the same answer or a finding ends
+    up on an object whose group appears in no table.
+
+    A pair that both sides switch off stays a duplication: it is the
+    reason the interface disappears, and the avoided effort is reported
+    as such. A pair where only one side is switched off is not - the
+    survivor has nothing left to converge with and is simply an object
+    to remediate.
+    """
+    systems = {system for system, _ in members}
+    remaining = {system for system, dropped in members if not dropped}
+    if not remaining:
+        return len(systems) > 1
+    return len(remaining) > 1
+
+
 GXP_VALIDATION_MULTIPLIER = {
     "gxp_critical": 2.0,
     "gxp_relevant": 1.5,
@@ -103,6 +126,10 @@ class Inventory:
         self._entries = entries
         self._by_path = {self._normalise(entry.path): entry for entry in entries}
         self._by_name = {entry.object_name.upper(): entry for entry in entries}
+
+    @property
+    def entries(self) -> list[InventoryEntry]:
+        return list(self._entries)
 
     @staticmethod
     def _normalise(path: str) -> str:
@@ -187,20 +214,10 @@ class Inventory:
         return [entry for entry in self._entries if entry.convergence_group == group_id]
 
     def is_cross_system_group(self, group_id: str) -> bool:
-        """Whether the group actually spans both ECC systems.
-
-        A group id with only one member is not a duplication - there is
-        nothing to converge - so it must not be reported as one.
-
-        Decommissioned members do not count. A duplicate that is being
-        switched off rather than rebuilt leaves nothing to converge
-        with, and counting it would flag the survivor as duplicated
-        while the convergence backlog - which prices only outstanding
-        members - showed no group at all.
-        """
-        members = [
-            entry
-            for entry in self.convergence_group(group_id)
-            if not entry.is_decommissioned
-        ]
-        return len({entry.source_system for entry in members}) > 1
+        """Whether the group actually spans both ECC systems."""
+        return is_a_duplication(
+            [
+                (entry.source_system, entry.is_decommissioned)
+                for entry in self.convergence_group(group_id)
+            ]
+        )
