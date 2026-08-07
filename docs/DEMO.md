@@ -15,7 +15,7 @@ make setup
 make scan
 ```
 
-16 custom objects, 184 findings outstanding, 31 of them blockers, plus
+16 custom objects, 173 findings outstanding, 27 of them blockers, plus
 what has already been cleared. Then the point that matters - it is not
 a flat list:
 
@@ -27,8 +27,8 @@ head -60 /tmp/backlog.md
 The backlog is ordered by wave, then severity, then business exposure
 (monthly execution volume and business criticality from
 `estate/inventory.csv`). Effort is sized per object and inflated by the
-GxP validation multiplier, so the plan separates 115 days of
-engineering from 53 days of validation overhead.
+GxP validation multiplier, so the plan separates 107 days of
+engineering from 45 days of validation overhead.
 
 Talking point: an SAP readiness check tells you which simplification
 items you hit. This tells you which objects to do first, who owns them,
@@ -64,9 +64,15 @@ also reports its progress.
 
 Pick an object from the top of the backlog and ask Devin for it, e.g.:
 
-> Remediate `ZGSK_MM_BATCH_MOVEMENTS` for S/4HANA following the pattern
+> Remediate `ZGSK_QM_BATCH_RELEASE` for S/4HANA following the pattern
 > in `abap/remediated/`. Clear every finding the scanner reports,
 > add an ABAP Unit test class, and open a PR.
+
+`ZGSK_MM_BATCH_MOVEMENTS` is the worked example of exactly that
+request: 11 findings cleared, MKPF/MSEG replaced by
+`I_MaterialDocumentItem`, the nested `SELECT` collapsed into one
+set-based read, eight ABAP Unit tests, and 16 engineer-days moved from
+outstanding to cleared in `make scan`.
 
 The loop closes on itself: the scanner defines the task, the remediated
 reference defines the pattern, CI verifies both, and the PR is the
@@ -85,6 +91,7 @@ Every reject is named:
 - an FI document out of balance by 10 cents;
 - an open item for a customer that does not exist in the master;
 - batch stock for a material that is not batch managed;
+- batch stock in a unit the material master contradicts;
 - a customer with country code `XX`.
 
 Then the conversion that always bites:

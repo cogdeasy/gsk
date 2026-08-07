@@ -33,59 +33,59 @@
     {
       "object": "batch_stock",
       "extracted": 20,
-      "rejected": 5,
-      "loaded": 15,
+      "rejected": 6,
+      "loaded": 14,
       "warnings": 7
     }
   ],
   "checks": [
     {
       "id": "REC-CNT-materials",
-      "description": "materials: extracted - rejected = loaded",
-      "source_value": "20 - 2",
-      "target_value": "18",
+      "description": "materials: every accepted record loaded once",
+      "source_value": "18 accepted keys",
+      "target_value": "18 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-customers",
-      "description": "customers: extracted - rejected = loaded",
-      "source_value": "16 - 1",
-      "target_value": "15",
+      "description": "customers: every accepted record loaded once",
+      "source_value": "15 accepted keys",
+      "target_value": "15 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-vendors",
-      "description": "vendors: extracted - rejected = loaded",
-      "source_value": "14 - 1",
-      "target_value": "13",
+      "description": "vendors: every accepted record loaded once",
+      "source_value": "13 accepted keys",
+      "target_value": "13 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-open_items",
-      "description": "open_items: extracted - rejected = loaded",
-      "source_value": "26 - 4",
-      "target_value": "22",
+      "description": "open_items: every accepted record loaded once",
+      "source_value": "22 accepted keys",
+      "target_value": "22 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-batch_stock",
-      "description": "batch_stock: extracted - rejected = loaded",
-      "source_value": "20 - 5",
-      "target_value": "15",
+      "description": "batch_stock: every accepted record loaded once",
+      "source_value": "14 accepted keys",
+      "target_value": "14 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-BP-001",
-      "description": "business partners created = accepted partners - merges",
-      "source_value": "28 - 3",
-      "target_value": "25",
+      "description": "one business partner per distinct legal entity",
+      "source_value": "25 identities in 28 records",
+      "target_value": "25 BPs in the load file",
       "status": "PASS",
-      "note": "customer/vendor records for the same legal entity share one BP"
+      "note": "3 records merged into a shared BP"
     },
     {
       "id": "REC-BP-002",
@@ -210,8 +210,8 @@
     {
       "id": "REC-STK-IE41",
       "description": "unrestricted stock quantity in plant IE41",
-      "source_value": "157000.000",
-      "target_value": "157000.000",
+      "source_value": "33000.000",
+      "target_value": "33000.000",
       "status": "PASS",
       "note": ""
     }

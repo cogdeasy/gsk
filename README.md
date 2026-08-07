@@ -58,10 +58,10 @@ Current state of the estate:
 | | |
 | --- | --- |
 | Objects scanned | 16 |
-| Objects remediated | 1 |
-| Findings outstanding | 184 (31 blocker, 65 critical, 57 major, 31 minor) |
-| Estimated effort | 168 engineer-days, of which 53 is GxP validation overhead |
-| Cleared so far | 16 engineer-days |
+| Objects remediated | 2 |
+| Findings outstanding | 173 (27 blocker, 61 critical, 55 major, 30 minor) |
+| Estimated effort | 152 engineer-days, of which 45 is GxP validation overhead |
+| Cleared so far | 32 engineer-days |
 
 An object leaves the backlog when `estate/inventory.csv` names its
 S/4HANA successor in `remediated_path`. The ECC source stays in
@@ -87,7 +87,8 @@ datamig run --wave wave0 --fail-on-reject     # cutover gate
 The wave 0 extracts carry deliberate defects - a batch-managed material
 with no shelf life, an unbalanced FI document, an open item for a
 partner that does not exist, batch stock for a material that is not
-batch managed, an invalid ISO country. Each one is caught by a named
+batch managed, batch stock whose unit contradicts the material master,
+an invalid ISO country. Each one is caught by a named
 data quality rule, held back from the load, and reported.
 
 The customer/vendor to business partner conversion is the interesting

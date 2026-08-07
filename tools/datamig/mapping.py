@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .cleanse import UOM_ISO
+from .identity import PartnerIdentity, partner_identity
 
 BP_NUMBER_START = 1000000
 BP_GROUPING = "BPGS"
@@ -117,27 +118,17 @@ class BusinessPartnerResult:
         return sorted(rows, key=lambda row: (row["SourceType"], row["SourceId"]))
 
 
-def _identity(row: dict[str, str]) -> tuple[str, str, str, str]:
-    """Records sharing this identity become one business partner."""
-    return (
-        row["NAME1"].upper(),
-        row["LAND1"].upper(),
-        row["PSTLZ"].upper(),
-        row.get("STCEG", "").upper(),
-    )
-
-
 def convert_to_business_partners(
     customers: list[dict[str, str]], vendors: list[dict[str, str]]
 ) -> BusinessPartnerResult:
     """Customer/vendor integration: one BP per legal entity."""
     result = BusinessPartnerResult()
-    index: dict[tuple[str, str, str, str], BusinessPartner] = {}
+    index: dict[PartnerIdentity, BusinessPartner] = {}
     next_number = BP_NUMBER_START
 
     def get_partner(row: dict[str, str]) -> BusinessPartner:
         nonlocal next_number
-        identity = _identity(row)
+        identity = partner_identity(row)
         partner = index.get(identity)
         if partner is None:
             partner = BusinessPartner(
@@ -191,7 +182,10 @@ def map_open_item(row: dict[str, str], xref: dict[str, str]) -> dict[str, str]:
 
 def map_stock(row: dict[str, str], materials: dict[str, dict[str, str]]) -> dict[str, str]:
     material = materials.get(row["MATNR"], {})
-    base_unit = UOM_ISO.get(row["MEINS"], row["MEINS"])
+    # The unit of record is the one on the cleansed material master; the
+    # stock extract's own MEINS is not validated against the ISO mapping.
+    source_unit = material.get("MEINS") or row["MEINS"]
+    base_unit = UOM_ISO.get(source_unit, source_unit)
     return {
         "Product": strip_leading_zeros(row["MATNR"]),
         "Plant": row["WERKS"],
