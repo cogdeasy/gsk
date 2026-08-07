@@ -162,9 +162,9 @@
       "id": "REC-MRG-004",
       "description": "every harmonisation decision was applied or rejected",
       "source_value": "4 decisions",
-      "target_value": "3 applied",
+      "target_value": "3 applied, 1 rejected",
       "status": "PASS",
-      "note": "not applied (material rejected or absent): GVP/000000000000700301"
+      "note": "held back by cleansing: GVP/000000000000700301"
     },
     {
       "id": "REC-FI-VAL-BE01-EUR",

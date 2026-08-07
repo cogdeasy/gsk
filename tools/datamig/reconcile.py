@@ -132,6 +132,7 @@ def _merge_checks(
     cross_system_partners: int,
     products: ProductResult | None,
     harmonisation: ProductHarmonisation | None,
+    rejected_materials: set[tuple[str, str]],
 ) -> list[Check]:
     """Prove that every record the merge removed was meant to go."""
     checks: list[Check] = []
@@ -202,22 +203,34 @@ def _merge_checks(
         applied = {
             (system, material) for system, material in products.merged_materials
         }
-        unapplied = sorted(harmonisation.merged_materials - applied)
+        unapplied = set(harmonisation.merged_materials) - applied
+        # A decision naming a material that cleansing rejected is
+        # accounted for: the record is held back and visible in the
+        # exception report. A decision that is neither applied nor
+        # rejected names a material that is not in the extract at all -
+        # the merge simply did not happen, and nothing else would say
+        # so.
+        held = sorted(unapplied & rejected_materials)
+        stale = sorted(unapplied - rejected_materials)
+        notes = []
+        if held:
+            notes.append(
+                "held back by cleansing: "
+                + ", ".join(f"{system}/{material}" for system, material in held)
+            )
+        if stale:
+            notes.append(
+                "stale, no such material in the extract: "
+                + ", ".join(f"{system}/{material}" for system, material in stale)
+            )
         checks.append(
             Check(
                 id="REC-MRG-004",
                 description="every harmonisation decision was applied or rejected",
                 source_value=f"{len(harmonisation.merged_materials)} decisions",
-                target_value=f"{len(applied)} applied",
-                # A decision for a material that was rejected in
-                # cleansing is legitimate; one for a material that is
-                # simply absent from the extract is a stale decision.
-                passed=True,
-                note=(
-                    "" if not unapplied
-                    else "not applied (material rejected or absent): "
-                    + ", ".join(f"{system}/{material}" for system, material in unapplied)
-                ),
+                target_value=f"{len(applied)} applied, {len(held)} rejected",
+                passed=not stale,
+                note="; ".join(notes),
             )
         )
 
@@ -241,6 +254,7 @@ def build(
     accepted_by_system: dict[str, dict[str, int]] | None = None,
     products: ProductResult | None = None,
     harmonisation: ProductHarmonisation | None = None,
+    rejected_materials: set[tuple[str, str]] | None = None,
 ) -> Reconciliation:
     reconciliation = Reconciliation(
         wave=wave,
@@ -315,6 +329,7 @@ def build(
             cross_system_partners=cross_system_partners,
             products=products,
             harmonisation=harmonisation,
+            rejected_materials=rejected_materials or set(),
         )
     )
 
@@ -419,6 +434,13 @@ def to_markdown(reconciliation: Reconciliation) -> str:
         "that were deliberately absorbed into another record by the "
         "consolidation, so `extracted - rejected - merged` is what the "
         "load file should contain."
+    )
+    lines.append("")
+    lines.append(
+        "`Merged` is zero for customers and vendors because their load "
+        "file is the cross reference, which keeps one row per source "
+        "record. Partner merges collapse business partners, not "
+        "records, and are counted in `REC-MRG-001` below."
     )
     lines.append("")
     lines.append("| Object | Extracted | Rejected | Merged | Loaded | Warnings |")

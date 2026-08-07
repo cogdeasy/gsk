@@ -69,17 +69,23 @@ class HarmonisationDecision:
     note: str
 
 
-def read_csv(path: str | Path, name: str, source_system: str = "") -> Dataset:
+def read_csv(path: str | Path, name: str, source_system: str) -> Dataset:
+    """Read one system's extract.
+
+    ``source_system`` is required: every downstream stage keys on it,
+    and a row without it fails somewhere far from where it was read.
+    """
     file_path = Path(path)
     if not file_path.exists():
         raise ExtractError(f"extract not found: {file_path}")
+    if source_system not in SOURCE_SYSTEMS:
+        raise ExtractError(f"unknown source system: {source_system}")
 
     rows: list[dict[str, str]] = []
     with open(file_path, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             record = {key: (value or "").strip() for key, value in row.items()}
-            if source_system:
-                record[SYSTEM_FIELD] = source_system
+            record[SYSTEM_FIELD] = source_system
             rows.append(record)
 
     return Dataset(name=name, sources=[file_path.as_posix()], rows=rows)

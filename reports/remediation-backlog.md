@@ -39,15 +39,22 @@ Two ECC 6.0 systems converge on one S/4HANA target. Objects and findings below a
 
 Functions implemented separately in both ECC systems. Each group becomes one S/4HANA object, so it is planned and delivered once: `converged` is the largest implementation plus the fit-gap that reconciles the other into it, against `independent`, which is what remediating both in place would cost. The difference is only realised if the group is sequenced as one piece of work.
 
+Both columns cover the implementations still to build. Where one system's object has already been rebuilt it is the target the other converges into, not outstanding work, so it is excluded - the saving was banked when it was built.
+
 | Group | Wave | Systems | Independent days | Converged days | Avoided |
 | --- | --- | --- | --- | --- | --- |
 | CG-IF-LABEL | wave0 | GEP, GVP | 35.2 | 24.5 | 10.7 |
 | CG-MD-PARTNER | wave0 | GEP, GVP | 36.0 | 21.8 | 14.2 |
-| CG-MM-BATCHGEN | wave0 | GEP, GVP | 46.4 | 33.6 | 12.8 |
-| CG-MM-STOCK | wave0 | GEP, GVP | 29.0 | 18.6 | 10.4 |
 | CG-QM-RELEASE | wave0 | GEP, GVP | 40.0 | 23.7 | 16.3 |
 | CG-FI-APAGE | wave1 | GEP, GVP | 16.4 | 11.1 | 5.3 |
-| **Total** | | | | | **69.7** |
+| **Total** | | | | | **46.5** |
+
+These groups have no choice left to make: the other system's implementation is already in S/4HANA, so the outstanding object folds into it rather than being remediated in place. `SI-CONV-001` still fires on it.
+
+| Group | Already built | Folds into it |
+| --- | --- | --- |
+| CG-MM-BATCHGEN | ZGSK_MM_BATCH_MOVEMENTS (GEP) | ZBIO_MM_BATCH_GENEALOGY (GVP) |
+| CG-MM-STOCK | ZGSK_MM_STOCK_OVERVIEW (GEP) | ZBIO_MM_STOCK_REPORT (GVP) |
 
 ## Decommissioned at merge
 

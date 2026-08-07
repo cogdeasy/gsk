@@ -158,6 +158,32 @@ class ConvergenceGroup:
     def is_remediated(self) -> bool:
         return all(obj.is_remediated for obj in self.objects)
 
+    @property
+    def outstanding(self) -> list[ObjectResult]:
+        """Members still to build.
+
+        A member that already has an S/4HANA successor is not work: it
+        is the target the others converge into. Pricing the group over
+        every member would claim credit for it twice.
+        """
+        return [
+            obj
+            for obj in self.objects
+            if not obj.is_remediated and not obj.is_decommissioned
+        ]
+
+    @property
+    def has_built_counterpart(self) -> bool:
+        """One side is already in S/4HANA, so there is nothing to choose.
+
+        The remaining implementation still must not be remediated in
+        place - it folds into the object that exists - but the merge
+        saving was banked when that object was built.
+        """
+        return len(self.outstanding) < 2 and any(
+            obj.is_remediated for obj in self.objects
+        )
+
 
 @dataclass
 class ScanResult:
@@ -297,7 +323,7 @@ def scan_file(
                 )
             )
 
-    _apply_object_rules(result, file_path, rule_filter, test_roots or [])
+    _apply_object_rules(result, file_path, rule_filter, test_roots or [], inventory)
     result.findings.sort(key=lambda finding: (finding.line, finding.rule_id))
     return result
 
@@ -307,6 +333,7 @@ def _apply_object_rules(
     file_path: Path,
     rule_filter: RuleFilter,
     test_roots: list[Path],
+    inventory: Inventory | None = None,
 ) -> None:
     for rule in OBJECT_RULES:
         if not rule_filter.applies(rule):
@@ -315,6 +342,14 @@ def _apply_object_rules(
             if result.entry is None or not result.entry.converges:
                 continue
             if result.is_remediated:
+                continue
+            # Only a group with a member in the other system is a
+            # duplication. Without this the finding would contradict
+            # the convergence backlog, which drops single-system
+            # groups.
+            if inventory is not None and not inventory.is_cross_system_group(
+                result.entry.convergence_group
+            ):
                 continue
             result.findings.append(
                 Finding(

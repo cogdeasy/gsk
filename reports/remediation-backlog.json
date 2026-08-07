@@ -89,28 +89,6 @@
         "avoided_days": 14.2
       },
       {
-        "group_id": "CG-MM-BATCHGEN",
-        "wave": "wave0",
-        "source_systems": [
-          "GEP",
-          "GVP"
-        ],
-        "independent_days": 46.4,
-        "converged_days": 33.6,
-        "avoided_days": 12.8
-      },
-      {
-        "group_id": "CG-MM-STOCK",
-        "wave": "wave0",
-        "source_systems": [
-          "GEP",
-          "GVP"
-        ],
-        "independent_days": 29.0,
-        "converged_days": 18.6,
-        "avoided_days": 10.4
-      },
-      {
         "group_id": "CG-QM-RELEASE",
         "wave": "wave0",
         "source_systems": [
@@ -133,7 +111,7 @@
         "avoided_days": 5.3
       }
     ],
-    "convergence_avoided_days": 69.7,
+    "convergence_avoided_days": 46.5,
     "decommission_avoided_days": 19.6,
     "decommissioned": [
       {

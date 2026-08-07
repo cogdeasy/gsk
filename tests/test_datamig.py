@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -59,17 +60,21 @@ def test_extract_raises_for_a_missing_wave(tmp_path):
         extract.extract_wave(tmp_path / "nope")
 
 
+def _material(
+    system: str, number: str, description: str = "TEST", unit: str = "ST"
+) -> dict[str, str]:
+    """A material row that cleanses without incident unless altered."""
+    return {
+        "SOURCE_SYSTEM": system, "MATNR": number, "MTART": "FERT",
+        "MATKL": "X", "MEINS": unit, "BRGEW": "1.0", "GEWEI": "KG",
+        "SPART": "01", "XCHPF": "X", "MHDHB": "365",
+        "ZZ_TEMP_CLASS": "15-25C", "MAKTX": description,
+        "WERKS": "GB21", "DISPO": "101",
+    }
+
+
 def test_lower_case_base_unit_is_repaired():
-    rows = [
-        {
-            "SOURCE_SYSTEM": "GEP",
-            "MATNR": "1", "MTART": "FERT", "MATKL": "X", "MEINS": "st",
-            "BRGEW": "1.0", "GEWEI": "KG", "SPART": "01", "XCHPF": "X",
-            "MHDHB": "365", "ZZ_TEMP_CLASS": "15-25C", "MAKTX": "TEST",
-            "WERKS": "GB21", "DISPO": "101",
-        }
-    ]
-    outcome = cleanse.cleanse_materials(rows)
+    outcome = cleanse.cleanse_materials([_material("GEP", "1", unit="st")])
     assert outcome.accepted[0]["MEINS"] == "ST"
     assert outcome.issues_for("DQ-MAT-001")[0].action is Action.FIX
 
@@ -174,8 +179,67 @@ def test_stock_from_both_systems_lands_on_the_harmonised_product(result):
 
 def test_the_merge_arithmetic_is_reconciled(result):
     checks = {check.id: check for check in result.reconciliation.checks}
-    for check_id in ("REC-MRG-001", "REC-MRG-002", "REC-MRG-003"):
+    for check_id in ("REC-MRG-001", "REC-MRG-002", "REC-MRG-003", "REC-MRG-004"):
         assert checks[check_id].passed, check_id
+
+
+def test_a_decision_held_back_by_cleansing_is_accounted_for(result):
+    """The material was rejected, so the merge legitimately did not run."""
+    check = next(
+        check for check in result.reconciliation.checks if check.id == "REC-MRG-004"
+    )
+    assert check.passed
+    assert "GVP/000000000000700301" in check.note
+    assert "held back by cleansing" in check.note
+
+
+def test_a_harmonisation_decision_for_an_absent_material_fails_the_wave(tmp_path):
+    """A decision nothing else would notice was never carried out."""
+    source = tmp_path / "wave0"
+    shutil.copytree(WAVE0, source)
+    with open(source / extract.HARMONISATION_FILE, "a", encoding="utf-8") as handle:
+        handle.write(
+            "GVP,000000000000799999,100236,merge,Material is not in the extract\n"
+        )
+
+    outcome = pipeline.run(
+        wave="wave0", source_dir=source, out_dir=tmp_path / "out", write_files=False
+    )
+    check = next(
+        check for check in outcome.reconciliation.checks if check.id == "REC-MRG-004"
+    )
+    assert not check.passed
+    assert "GVP/000000000000799999" in check.note
+    assert not outcome.reconciliation.passed
+
+
+def test_a_material_number_used_in_both_systems_is_flagged():
+    """The two systems share number ranges, so MATNR alone is ambiguous."""
+    rows = [
+        _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+        _material("GVP", "000000000000100801", "ANTIGEN BULK RSV"),
+    ]
+    outcome = cleanse.cleanse_materials(rows)
+    collisions = outcome.issues_for("DQ-MAT-009")
+    assert len(collisions) == 1
+    assert collisions[0].action is Action.WARN
+    assert "GEP/000000000000100801" in collisions[0].key
+    assert "GVP/000000000000100801" in collisions[0].key
+
+
+def test_a_material_number_unique_to_one_system_is_not_flagged():
+    rows = [
+        _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+        _material("GVP", "000000000000700801", "ANTIGEN BULK RSV"),
+    ]
+    assert cleanse.cleanse_materials(rows).issues_for("DQ-MAT-009") == []
+
+
+def test_an_extract_must_declare_its_source_system(tmp_path):
+    path = tmp_path / "ecc_mara_material_master.csv"
+    path.write_text("MATNR\n000000000000100001\n", encoding="utf-8")
+    with pytest.raises(extract.ExtractError, match="unknown source system"):
+        extract.read_csv(path, "materials", "")
 
 
 def test_reconciliation_counts_each_source_system(result):

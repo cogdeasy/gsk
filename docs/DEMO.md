@@ -45,11 +45,14 @@ source systems:
   GEP    17 objects,  14 outstanding
   GVP     8 objects,   7 outstanding
 
-convergence groups    : 6 (69.7 engineer-days avoided by building one object)
+convergence groups    : 4 (46.5 engineer-days avoided by building one object)
 ```
 
 GSK Vaccines runs a separate ECC instance, and both land in one
-S/4HANA client. So six functions exist twice:
+S/4HANA client. So six functions exist twice - four of them still have
+a choice to make, which is what the saving is priced on; the other two
+have a core side that is already rebuilt, so the Vaccines object folds
+into it and there is nothing left to save:
 
 ```bash
 s4scan scan abap/ecc --format markdown --out /tmp/backlog.md

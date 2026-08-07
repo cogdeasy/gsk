@@ -151,12 +151,46 @@ def test_convergence_estimate_is_cheaper_than_remediating_both():
     assert {estimate.group_id for estimate in estimates} == {
         group.group_id
         for group in result.convergence_groups()
-        if not group.is_remediated and not group.is_decommissioned
+        if not group.is_decommissioned and len(group.outstanding) > 1
     }
     for estimate in estimates:
         assert estimate.source_systems == ("GEP", "GVP")
         assert estimate.converged_days < estimate.independent_days
         assert estimate.avoided_days > 0
+
+
+def test_a_group_whose_counterpart_is_built_claims_no_saving():
+    """The saving was banked when the first object was rebuilt."""
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    settled = report.groups_with_built_counterpart(result)
+    assert settled
+
+    priced = {estimate.group_id for estimate in report.convergence_estimates(result)}
+    for group in settled:
+        assert group.group_id not in priced
+        assert any(obj.is_remediated for obj in group.objects)
+
+
+def test_convergence_estimate_ignores_an_already_remediated_member():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    for estimate in report.convergence_estimates(result):
+        group = next(
+            group for group in result.convergence_groups()
+            if group.group_id == estimate.group_id
+        )
+        outstanding_days = round(
+            sum(report._days(obj.weighted_effort_points) for obj in group.outstanding),
+            1,
+        )
+        assert estimate.independent_days == outstanding_days
+
+
+def test_the_object_left_over_still_must_not_be_remediated_alone():
+    """Its counterpart exists in S/4HANA, so it folds into that."""
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    for group in report.groups_with_built_counterpart(result):
+        for obj in group.outstanding:
+            assert "SI-CONV-001" in {finding.rule.id for finding in obj.findings}
 
 
 def test_every_legacy_source_is_in_the_inventory():

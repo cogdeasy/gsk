@@ -156,3 +156,12 @@ class Inventory:
     def convergence_group(self, group_id: str) -> list[InventoryEntry]:
         """Every object that collapses into the same S/4HANA successor."""
         return [entry for entry in self._entries if entry.convergence_group == group_id]
+
+    def is_cross_system_group(self, group_id: str) -> bool:
+        """Whether the group actually spans both ECC systems.
+
+        A group id with only one member is not a duplication - there is
+        nothing to converge - so it must not be reported as one.
+        """
+        members = self.convergence_group(group_id)
+        return len({entry.source_system for entry in members}) > 1

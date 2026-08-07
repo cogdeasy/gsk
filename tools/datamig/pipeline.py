@@ -128,10 +128,15 @@ def run(
         ObjectCounts(
             "materials", materials.source_count, len(materials.rejected),
             len(result.products), _warnings(materials),
-            # Expected on the target side is the set of harmonised
-            # product numbers, not the set of source materials: merged
-            # materials are deliberately absent from the load file.
-            source_keys=frozenset(products.xref.values()),
+            # Expected is the set of harmonised product numbers, not
+            # the set of source materials: merged materials are
+            # deliberately absent from the load file. Derived from the
+            # accepted ECC rows and the governed decision table rather
+            # than from the mapping's own cross reference, so a defect
+            # in the mapping cannot cancel itself out on both sides.
+            source_keys=frozenset(
+                harmonisation.target_product(row) for row in materials.accepted
+            ),
             target_keys=_keys(result.products, "Product"),
             merged=products.merged_count,
         ),
@@ -205,6 +210,9 @@ def run(
         accepted_by_system=_accepted_by_system(result.cleansing),
         products=products,
         harmonisation=harmonisation,
+        rejected_materials={
+            (row["SOURCE_SYSTEM"], row["MATNR"]) for row in materials.rejected
+        },
     )
 
     if write_files:

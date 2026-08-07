@@ -73,12 +73,20 @@ The order has to be fit-gap, then one build.
 `s4scan scan abap/ecc` reports what that saves:
 
 ```
-convergence groups    : 6 (69.7 engineer-days avoided by building one object)
+convergence groups    : 4 (46.5 engineer-days avoided by building one object)
 ```
 
 The estimate is the difference between remediating every member
 independently and building the largest member once plus a fit-gap
 allowance. It is a planning number, not a quote.
+
+Six groups exist; four carry a saving. `CG-MM-STOCK` and
+`CG-MM-BATCHGEN` have a core implementation that is already rebuilt in
+S/4HANA, so there is no choice left to make and no saving left to
+claim - the Vaccines object folds into the object that exists. Counting
+the rebuilt side would claim credit for work the same report counts as
+cleared. The backlog lists those two separately, and `SI-CONV-001`
+still fires on the object that remains.
 
 Use `--system GEP` or `--system GVP` to scan one estate at a time, for
 example when a workstream owns only one of them.

@@ -65,6 +65,11 @@ class ConvergenceEstimate:
     largest implementation, plus the fit-gap that reconciles the others
     into it. The difference is only realised if the group is planned as
     one piece of work - remediate them separately and it is lost.
+
+    Both figures cover the members still to build. A member that has
+    already been rebuilt in S/4HANA is the target the others converge
+    into, not work outstanding, so counting it would claim credit for
+    effort the backlog reports as cleared.
     """
 
     group_id: str
@@ -76,14 +81,16 @@ class ConvergenceEstimate:
 
     @classmethod
     def from_group(cls, group: ConvergenceGroup) -> ConvergenceEstimate:
-        member_days = [_days(obj.weighted_effort_points) for obj in group.objects]
+        outstanding = group.outstanding
+        member_days = [_days(obj.weighted_effort_points) for obj in outstanding]
         independent = sum(member_days)
-        design = _days(CONVERGENCE_DESIGN_POINTS * group.validation_multiplier)
+        multiplier = max(obj.validation_multiplier for obj in outstanding)
+        design = _days(CONVERGENCE_DESIGN_POINTS * multiplier)
         converged = max(member_days) + design
         return cls(
             group_id=group.group_id,
-            wave=group.wave,
-            source_systems=tuple(group.source_systems),
+            wave=min(obj.wave for obj in outstanding),
+            source_systems=tuple(sorted({obj.source_system for obj in outstanding})),
             independent_days=round(independent, 1),
             converged_days=round(converged, 1),
             avoided_days=round(max(independent - converged, 0.0), 1),
@@ -120,8 +127,19 @@ def convergence_estimates(result: ScanResult) -> list[ConvergenceEstimate]:
         for group in result.convergence_groups()
         # A pair that is decommissioned at the merge has no successor to
         # design, so it carries no convergence effort - it is counted in
-        # the decommission saving instead.
-        if not group.is_remediated and not group.is_decommissioned
+        # the decommission saving instead. A group with one member left
+        # to build has nothing to converge: its counterpart is already
+        # the target, and the saving was banked when that was built.
+        if not group.is_decommissioned and len(group.outstanding) > 1
+    ]
+
+
+def groups_with_built_counterpart(result: ScanResult) -> list[ConvergenceGroup]:
+    """Groups where the other system's implementation already exists."""
+    return [
+        group
+        for group in result.convergence_groups()
+        if group.has_built_counterpart
     ]
 
 
@@ -302,7 +320,9 @@ def to_markdown(result: ScanResult) -> str:
     lines.append("")
 
     lines.extend(_source_system_section(result, backlog))
-    lines.extend(_convergence_section(convergence))
+    lines.extend(
+        _convergence_section(convergence, groups_with_built_counterpart(result))
+    )
     lines.extend(_decommission_section(decommissioned))
 
     if remediated:
@@ -445,8 +465,11 @@ def _source_system_section(
     return lines
 
 
-def _convergence_section(convergence: list[ConvergenceEstimate]) -> list[str]:
-    if not convergence:
+def _convergence_section(
+    convergence: list[ConvergenceEstimate],
+    already_built: list[ConvergenceGroup] | None = None,
+) -> list[str]:
+    if not convergence and not already_built:
         return []
 
     lines = ["## Convergence backlog", ""]
@@ -458,6 +481,13 @@ def _convergence_section(convergence: list[ConvergenceEstimate]) -> list[str]:
         "`independent`, which is what remediating both in place would "
         "cost. The difference is only realised if the group is "
         "sequenced as one piece of work."
+    )
+    lines.append("")
+    lines.append(
+        "Both columns cover the implementations still to build. Where "
+        "one system's object has already been rebuilt it is the target "
+        "the other converges into, not outstanding work, so it is "
+        "excluded - the saving was banked when it was built."
     )
     lines.append("")
     lines.append(
@@ -474,6 +504,30 @@ def _convergence_section(convergence: list[ConvergenceEstimate]) -> list[str]:
     total_avoided = round(sum(e.avoided_days for e in convergence), 1)
     lines.append(f"| **Total** | | | | | **{total_avoided}** |")
     lines.append("")
+
+    if already_built:
+        lines.append(
+            "These groups have no choice left to make: the other "
+            "system's implementation is already in S/4HANA, so the "
+            "outstanding object folds into it rather than being "
+            "remediated in place. `SI-CONV-001` still fires on it."
+        )
+        lines.append("")
+        lines.append("| Group | Already built | Folds into it |")
+        lines.append("| --- | --- | --- |")
+        for group in already_built:
+            built = ", ".join(
+                f"{obj.object_name} ({obj.source_system})"
+                for obj in group.objects
+                if obj.is_remediated
+            )
+            folding = ", ".join(
+                f"{obj.object_name} ({obj.source_system})"
+                for obj in group.outstanding
+            )
+            lines.append(f"| {group.group_id} | {built} | {folding or '-'} |")
+        lines.append("")
+
     return lines
 
 
