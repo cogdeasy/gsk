@@ -151,6 +151,14 @@ def to_markdown(result: ScanResult) -> str:
         "object inventory."
     )
     lines.append("")
+    lines.append(
+        "Findings found and findings outstanding are different numbers: an "
+        "object with a `remediated_path` keeps its findings as cleared "
+        "evidence but leaves the backlog. Every breakdown below, and every "
+        "breakdown in the JSON, counts outstanding work only - the JSON key "
+        "that reconciles with them is `outstanding_findings`, not `findings`."
+    )
+    lines.append("")
     lines.append("## Summary")
     lines.append("")
     lines.append("| Metric | Value |")
