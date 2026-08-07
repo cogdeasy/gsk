@@ -87,6 +87,7 @@ def run(
         datasets["batch_stock"].rows,
         accepted_materials,
         materials.harmonisation_holds,
+        materials.collision_holds,
     )
 
     result.cleansing = {

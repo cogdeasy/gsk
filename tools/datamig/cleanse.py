@@ -84,6 +84,10 @@ class CleanseResult:
     #: held back by `DQ-MAT-010`. Downstream objects need the reason,
     #: not just the absence, to report their own rejects usefully.
     harmonisation_holds: dict[str, str] = field(default_factory=dict)
+    #: Source keys held back by `DQ-MAT-009` - the number means two
+    #: things and nobody has said which survives. Same reason as
+    #: above: the absence alone would read as a missing master.
+    collision_holds: set[str] = field(default_factory=set)
 
     @property
     def source_count(self) -> int:
@@ -249,6 +253,7 @@ def _reject_undecided_collisions(
         if source_key(row, "MATNR") not in rejected
     ]
     result.rejected.extend(colliding)
+    result.collision_holds.update(rejected)
 
 
 def _reject_orphaned_merges(
@@ -443,9 +448,11 @@ def cleanse_batch_stock(
     rows: list[dict[str, str]],
     materials: dict[str, dict[str, str]],
     harmonisation_holds: dict[str, str] | None = None,
+    collision_holds: set[str] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="batch_stock")
     holds = harmonisation_holds or {}
+    collisions = collision_holds or set()
 
     for row in rows:
         key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
@@ -463,6 +470,17 @@ def cleanse_batch_stock(
                        f"material was harmonised into product "
                        f"{holds[material_key]}, which cleansing held back "
                        "(DQ-MAT-010); this stock loads once that product does")
+            )
+        elif material is None and material_key in collisions:
+            # Same reasoning as DQ-STK-006: the master is absent by
+            # decision, not by accident, and the steward has nothing to
+            # do here until the collision is settled.
+            reject = True
+            result.issues.append(
+                _issue("DQ-STK-007", Action.REJECT, "batch_stock", key, "MATNR",
+                       f"material number {strip_leading_zeros(row['MATNR'])} is "
+                       "held in both source systems and no decision names a "
+                       "survivor (DQ-MAT-009); this stock loads once one does")
             )
         elif material is None:
             reject = True

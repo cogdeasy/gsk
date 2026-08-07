@@ -283,6 +283,47 @@ def test_a_stranded_merge_survivor_fails_the_wave(result):
     assert dropped in check.note
 
 
+def test_a_material_the_mapping_never_saw_fails_the_wave(result):
+    """REC-MRG-002 counts its source side on the ECC side, not the load.
+
+    A row the mapping skips outright leaves no xref entry and no
+    product, so reading both numbers off the mapping would drop it from
+    each side of the equality and still balance.
+    """
+    from datamig import reconcile
+
+    harmonisation = mapping.ProductHarmonisation(
+        extract.read_harmonisation(WAVE0 / extract.HARMONISATION_FILE)
+    )
+    accepted = result.cleansing["materials"].accepted
+    skipped = next(row for row in accepted if not harmonisation.is_merged(row))
+    number = mapping.strip_leading_zeros(skipped["MATNR"])
+
+    products = copy.copy(result.product_result)
+    products.products = [
+        row for row in result.product_result.products if row["Product"] != number
+    ]
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=[],
+        accepted_open_items=[],
+        loaded_open_items=[],
+        accepted_stock=[],
+        loaded_stock=[],
+        accepted_partners=0,
+        partner_identities=0,
+        business_partners=0,
+        merged_partners=0,
+        xref={},
+        products=products,
+        harmonisation=harmonisation,
+        accepted_materials=accepted,
+    )
+    check = next(c for c in broken.checks if c.id == "REC-MRG-002")
+    assert not check.passed
+
+
 def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     """REC-MRG-001 has to notice a record that never reached the load."""
     from datamig import reconcile
@@ -311,6 +352,44 @@ def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     )
     check = next(c for c in broken.checks if c.id == "REC-MRG-001")
     assert not check.passed
+
+
+def test_stock_stranded_by_a_number_collision_says_so():
+    """A held-back collision must not read as a missing master.
+
+    Sending a steward to look for a material that was deliberately not
+    loaded is the failure DQ-STK-006 exists to prevent; the collision
+    hold needs the same treatment.
+    """
+    materials = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GVP", "000000000000100801", "ANTIGEN BULK RSV"),
+        ]
+    )
+    assert materials.collision_holds
+
+    stock = cleanse.cleanse_batch_stock(
+        [
+            {
+                "SOURCE_SYSTEM": "GVP", "WERKS": "BE32",
+                "MATNR": "000000000000100801", "CHARG": "AB2600099",
+                "LGORT": "0001", "CLABS": "10.000", "CINSM": "0.000",
+                "CSPEM": "0.000", "MEINS": "ST",
+                "VFDAT": "20270101", "HSDAT": "20260101", "ZUSTD": "",
+            }
+        ],
+        materials={},
+        harmonisation_holds=materials.harmonisation_holds,
+        collision_holds=materials.collision_holds,
+    )
+
+    collision = stock.issues_for("DQ-STK-007")
+    assert [issue.key for issue in collision] == [
+        "GVP/BE32/000000000000100801/AB2600099"
+    ]
+    assert "DQ-MAT-009" in collision[0].message
+    assert not stock.issues_for("DQ-STK-001")
 
 
 def test_stock_stranded_by_a_harmonisation_says_so(result):

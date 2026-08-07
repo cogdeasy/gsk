@@ -104,10 +104,12 @@ def _run_scan(args: argparse.Namespace) -> int:
         test_roots=list(test_roots),
     )
 
+    # A wave is a plan, and a group is planned as one piece of work, so
+    # a group outside the wave is genuinely not this scan's business -
+    # narrow the estate itself. A system is not a plan: the same group
+    # spans both, so `--system` narrows only the view.
     if args.wave:
-        result.restrict_to(
-            [obj for obj in result.objects if obj.wave == args.wave]
-        )
+        result.objects = [obj for obj in result.objects if obj.wave == args.wave]
 
     if args.system:
         result.restrict_to(

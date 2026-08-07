@@ -163,7 +163,13 @@ def _merge_checks(
         material_counts = next(
             (count for count in counts if count.object_name == "materials"), None
         )
-        mapped_materials = len(products.xref)
+        # Counted on the ECC side, after cleansing. Taking it from
+        # products.xref instead would compare the mapping with itself:
+        # every accepted row contributes exactly one xref entry and
+        # then either a product or a merge, so the equality holds by
+        # construction and a row the mapping skipped entirely drops out
+        # of both sides.
+        mapped_materials = len(accepted_materials)
         checks.append(
             Check(
                 id="REC-MRG-002",

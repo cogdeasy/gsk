@@ -66,6 +66,23 @@ def test_a_single_system_view_still_prices_the_duplication(capsys):
     assert "not this view's" not in both
 
 
+def test_a_wave_view_prices_only_its_own_groups(capsys):
+    """A wave is a plan, so a group outside it is out of scope.
+
+    Unlike --system, which narrows the view onto an estate the groups
+    still span, --wave narrows the estate itself: the group is planned
+    and delivered as one piece of work within a wave.
+    """
+    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0"])
+    wave0 = capsys.readouterr().out
+    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave1"])
+    wave1 = capsys.readouterr().out
+
+    assert "convergence groups    : 3" in wave0
+    assert "convergence groups    : 1" in wave1
+    assert "not this view's" not in wave0
+
+
 def test_s4scan_summary_reports_the_merge(capsys):
     s4scan_cli.main(["scan", "abap/ecc"])
     output = capsys.readouterr().out

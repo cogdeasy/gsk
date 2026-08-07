@@ -147,6 +147,8 @@ record would lose its master data and hand its batches to whatever the
 first record was. `DQ-MAT-009` holds both records back until a
 harmonisation decision nominates the survivor - the one case where the
 tooling refuses to guess and stops the load rather than logging it.
+The batches on those materials are held with them under `DQ-STK-007`,
+which names the collision rather than reporting a missing master.
 
 **A decision has to name a product that exists.** `REC-MRG-004`
 separates a decision held back by cleansing from one naming a survivor
