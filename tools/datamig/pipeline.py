@@ -228,6 +228,12 @@ def run(
             # reading the ECC side out of that same reference would move both
             # sides together and a batch put onto the wrong survivor
             # would reconcile clean.
+            #
+            # The independence is from the mapping, not from the
+            # decision table: both sides call `target_product`, so a
+            # defect in the harmonisation key itself moves them
+            # together and this check stays green. REC-MRG-003 is the
+            # one that reads the survivor off the load file.
             source_keys=frozenset(
                 "/".join(
                     (

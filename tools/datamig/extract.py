@@ -107,8 +107,11 @@ def read_csv(path: str | Path, name: str, source_system: str) -> Dataset:
             # the other's name.
             stated = record.get(SYSTEM_FIELD, "")
             if stated and stated != source_system:
+                # The record's row, counted the way the spreadsheet the
+                # steward opens it in counts: a quoted newline makes
+                # the physical line something nobody is looking at.
                 raise ExtractError(
-                    f"{file_path} line {number}: extracted from {stated} but "
+                    f"{file_path}: row {number} was extracted from {stated} but "
                     f"read as {source_system}; the file is in the wrong "
                     "system's folder or the column is wrong"
                 )
