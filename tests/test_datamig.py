@@ -251,6 +251,34 @@ def test_a_record_already_rejected_is_not_held_a_second_time():
     assert outcome.source_count == 2
 
 
+def test_the_same_record_listed_twice_is_held_like_any_other_duplicate():
+    """Identical details make it harder to spot, not less broken.
+
+    Two rows under one number look like one record: mapping writes the
+    cross reference twice under one source key and the wave fails a
+    count, with no exception naming what caused it - which is the
+    failure this rule exists to replace.
+    """
+    def customer() -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": "0000210045",
+            "NAME1": "NHS SUPPLY CHAIN",
+            "LAND1": "GB", "PSTLZ": "TW8 9GS", "STCEG": "GB123456789",
+            "ORT01": "London", "STRAS": "1 Test Way", "BUKRS": "1000",
+            "SPRAS": "E", "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [customer(), customer()], object_name="customers", key_field="KUNNR"
+    )
+
+    held = outcome.issues_for("DQ-CUS-009")
+    assert len(held) == 1
+    assert "for the same company (NHS SUPPLY CHAIN), twice" in held[0].message
+    assert outcome.accepted == []
+    assert len(outcome.rejected) == 2
+
+
 def test_a_merge_is_not_announced_for_records_the_collision_holds():
     """One side held is no merge; both sides held is nothing at all.
 

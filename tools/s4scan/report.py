@@ -102,7 +102,13 @@ class ConvergenceEstimate:
             source_systems=tuple(sorted({obj.source_system for obj in outstanding})),
             independent_days=round(independent, 1),
             converged_days=round(converged, 1),
-            avoided_days=round(max(independent - converged, 0.0), 1),
+            # Signed. A group of one large implementation and one small
+            # one can cost more converged than remediated in place: the
+            # fit-gap that reconciles the small one into the large one
+            # outweighs building it. Clamping at zero would present that
+            # as a merge worth nothing rather than as one worth not
+            # doing, which is a decision the table exists to inform.
+            avoided_days=round(independent - converged, 1),
         )
 
 
@@ -131,15 +137,13 @@ def build_backlog(result: ScanResult) -> list[ObjectResult]:
 
 
 def convergence_estimates(result: ScanResult) -> list[ConvergenceEstimate]:
+    # Which groups carry a price is the scanner's answer, not a second
+    # copy of the rule here: the caveat about groups reaching outside
+    # the view is quoted against the same set, and two spellings of
+    # "priced" would eventually disagree about which.
     return [
         ConvergenceEstimate.from_group(group)
-        for group in result.convergence_groups()
-        # A pair that is decommissioned at the merge has no successor to
-        # design, so it carries no convergence effort - it is counted in
-        # the decommission saving instead. A group with one member left
-        # to build has nothing to converge: its counterpart is already
-        # the target, and the saving was banked when that was built.
-        if not group.is_decommissioned and len(group.outstanding) > 1
+        for group in result.priced_convergence_groups()
     ]
 
 
@@ -558,6 +562,18 @@ def _convergence_section(
         total_avoided = round(sum(e.avoided_days for e in convergence), 1)
         lines.append(f"| **Total** | | | | | **{total_avoided}** |")
         lines.append("")
+
+        costlier = [e for e in convergence if e.avoided_days < 0]
+        if costlier:
+            lines.append(
+                f"{', '.join(f'`{e.group_id}`' for e in costlier)} "
+                f"{'costs' if len(costlier) == 1 else 'cost'} more converged "
+                "than remediated in place: the smaller implementation is "
+                "cheaper to rebuild than to reconcile into the larger one. "
+                "The duplication is still real - it is the merge that does "
+                "not pay for itself."
+            )
+            lines.append("")
 
     # A scan of part of the estate still raises SI-CONV-001, because
     # the duplication is a fact about the inventory rather than about

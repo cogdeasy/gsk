@@ -681,14 +681,28 @@ def cleanse_partners(
         # the first record's business partner. Held rather than warned,
         # because nothing downstream can tell the two apart.
         for system, group in by_system.items():
-            if len({identity for _, identity, _ in group}) < 2:
+            # On the count, not on the identities. Two rows carrying the
+            # same number and the same company are just as impossible -
+            # and worse to leave in, because they look like one record:
+            # mapping writes the cross reference twice under one source
+            # key, and the wave fails a count with no exception naming
+            # the record that broke it. Same test the material rule
+            # makes, which does not ask whether the two descriptions
+            # agree either.
+            if len(group) < 2:
                 continue
+            entities = {identity for _, identity, _ in group}
+            fault = (
+                f"for different entities ({_named(group)})"
+                if len(entities) > 1
+                else f"for the same company ({next(iter(entities))[0]}), twice"
+            )
             result.issues.append(
                 _issue(f"{prefix}-009", Action.REJECT, object_name,
                        [key for key, _, _ in group], key_field,
                        f"number {number} is held more than once in {system} "
-                       f"for different entities ({_named(group)}); the extract "
-                       "cannot be loaded until it is corrected")
+                       f"{fault}; the extract cannot be loaded until it is "
+                       "corrected")
             )
             # By identity, not by key: the two rows share a key, so
             # moving by key would move a row another rule has already

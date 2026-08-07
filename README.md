@@ -8,7 +8,7 @@ that goes with both.
 The estate is **two** ECC production systems converging into **one**
 S/4HANA client:
 
-| | System | Estate | Wave 0 extracts |
+| System | | Estate | Wave 0 extracts |
 | --- | --- | --- | --- |
 | `GEP` | GSK core ECC 6.0 | `abap/ecc/gep` (17 objects) | `data/wave0/gep` |
 | `GVP` | GSK Vaccines ECC 6.0 | `abap/ecc/gvp` (8 objects) | `data/wave0/gvp` |

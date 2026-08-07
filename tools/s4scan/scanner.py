@@ -337,20 +337,38 @@ class ScanResult:
             key=lambda group: (wave_rank(group.wave), group.group_id),
         )
 
+    def priced_convergence_groups(self) -> list[ConvergenceGroup]:
+        """The groups a merge saving can be quoted for.
+
+        A pair decommissioned at the merge has no successor to design,
+        so it carries no convergence effort - it is counted in the
+        decommission saving instead. A group with one member left to
+        build has nothing to converge: its counterpart is already the
+        target, and the saving was banked when that was built.
+        """
+        return [
+            group
+            for group in self.convergence_groups()
+            if not group.is_decommissioned and len(group.outstanding) > 1
+        ]
+
     def groups_extend_beyond_view(self) -> bool:
-        """Whether any reported group has a member the view cannot see.
+        """Whether any priced group has a member the view cannot see.
 
         What the convergence caveat is actually about. Being filtered
         is not the same thing: a group contained within one system's
         view is priced entirely out of what is on screen, and telling a
         reader otherwise is a false statement about their own numbers.
+        Only the priced groups count - a decommissioned pair half out of
+        view carries no days, so it cannot make the days on screen
+        someone else's.
         """
         if self.estate is None:
             return False
         visible = {obj.path for obj in self.objects}
         return any(
             obj.path not in visible
-            for group in self.convergence_groups()
+            for group in self.priced_convergence_groups()
             for obj in group.objects
         )
 

@@ -1,5 +1,6 @@
 import copy
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from s4scan import report
 from s4scan.inventory import Inventory, InventoryError, is_a_duplication, wave_rank
 from s4scan.rules import RuleFilter, Severity
 from s4scan.scanner import (
+    ConvergenceGroup,
     ScanResult,
     has_test_class,
     object_name_for,
@@ -394,6 +396,63 @@ def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
     result.filter(view=lambda obj: obj.path in in_groups)
     assert result.is_filtered
     assert not result.groups_extend_beyond_view()
+
+
+def test_a_view_holding_every_priced_group_claims_the_days_as_its_own():
+    """A decommissioned pair half out of sight carries no days.
+
+    The caveat says the saving on screen belongs to the programme
+    rather than to this view. Quoted over an unpriced group it is a
+    false statement about numbers that are, in fact, all here.
+    """
+    result = legacy_scan()
+    dropped = [
+        group for group in result.convergence_groups() if group.is_decommissioned
+    ]
+    assert dropped
+
+    priced = {
+        obj.path
+        for group in result.priced_convergence_groups()
+        for obj in group.objects
+    }
+    # Everything priced, and one member of a decommissioned pair cut
+    # out of the view.
+    hidden = dropped[0].objects[0].path
+    assert hidden not in priced
+    result.filter(view=lambda obj: obj.path in priced or obj.path != hidden)
+
+    assert result.is_filtered
+    assert not result.groups_extend_beyond_view()
+
+
+def test_a_merge_that_costs_more_than_it_saves_says_so():
+    """The small implementation is cheaper to rebuild than to reconcile.
+
+    Converging costs the larger implementation plus the fit-gap that
+    brings the smaller one into it, so a lopsided pair can cost more
+    merged than remediated in place. Clamped at zero that reads as a
+    merge worth nothing, which is a different instruction from one
+    worth not doing.
+    """
+    scanned = legacy_scan()
+    ordered = sorted(scanned.objects_with_findings(), key=lambda o: o.raw_effort_points)
+    biggest = ordered[-1]
+    # One finding against the estate's largest object: the fit-gap to
+    # reconcile it costs more than rebuilding it would.
+    slight = replace(
+        next(obj for obj in ordered if obj.source_system != biggest.source_system),
+        findings=ordered[0].findings[:1],
+    )
+
+    lopsided = ConvergenceGroup("CG-TEST")
+    lopsided.objects.extend([biggest, slight])
+    assert {obj.source_system for obj in lopsided.objects} == {"GEP", "GVP"}
+
+    estimate = report.ConvergenceEstimate.from_group(lopsided)
+
+    assert estimate.converged_days > estimate.independent_days
+    assert estimate.avoided_days < 0
 
 
 def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():
