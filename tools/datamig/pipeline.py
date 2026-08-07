@@ -96,8 +96,14 @@ def run(
         partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["LFA1"], row["LIFNR"])
         for row in vendors.accepted
     }
+    # A partner cleansing held back is absent by decision, and an open
+    # item naming it is held for that reason rather than for a master
+    # nobody can find. Same cascade as stock behind a held material.
+    held_partners = cleanse.held_partner_refs(
+        customers, PARTNER_TYPE_OF["KNA1"]
+    ) | cleanse.held_partner_refs(vendors, PARTNER_TYPE_OF["LFA1"])
     open_items = cleanse.cleanse_open_items(
-        datasets["open_items"].rows, known_partners
+        datasets["open_items"].rows, known_partners, held_partners
     )
 
     accepted_materials = {

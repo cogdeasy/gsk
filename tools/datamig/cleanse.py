@@ -16,6 +16,7 @@ because the same counterparty or product is mastered twice.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
@@ -29,6 +30,7 @@ from .identity import (
     partner_identity,
     partner_ref,
     source_key,
+    split_source_key,
     strip_leading_zeros,
 )
 
@@ -83,9 +85,19 @@ class Issue:
     rule_id: str
     action: Action
     object_name: str
-    key: str
+    # Every record the issue is raised against, kept as records. A
+    # rule about two records that disagree has two keys, and the
+    # joined string is how the exception pack prints them, not how
+    # anything reads them back: a key component that ever carried a
+    # comma would split into two records that do not exist.
+    keys: tuple[str, ...]
     field: str
     message: str
+
+    @property
+    def key(self) -> str:
+        """The records named, as the exception pack spells them."""
+        return ", ".join(self.keys)
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -125,12 +137,12 @@ class CleanseResult:
         return [issue for issue in self.issues if issue.rule_id == rule_id]
 
     def held_keys(self) -> set[str]:
-        """Every key a reject names, as the exception pack spells it."""
+        """Every record a reject names."""
         return {
-            key.strip()
+            key
             for issue in self.issues
             if issue.action is Action.REJECT
-            for key in issue.key.split(",")
+            for key in issue.keys
         }
 
     def warnings_on_loaded(self) -> list[Issue]:
@@ -147,7 +159,7 @@ class CleanseResult:
             issue
             for issue in self.issues
             if issue.action is Action.WARN
-            and not all(key.strip() in held for key in issue.key.split(","))
+            and not all(key in held for key in issue.keys)
         ]
 
 
@@ -156,12 +168,19 @@ def _row_key(row: dict[str, str]) -> tuple[str, str]:
     return material_key(row["SOURCE_SYSTEM"], row["MATNR"])
 
 
-def _issue(rule_id, action, object_name, key, field_name, message) -> Issue:
+def _issue(
+    rule_id: str,
+    action: Action,
+    object_name: str,
+    key: str | Sequence[str],
+    field_name: str,
+    message: str,
+) -> Issue:
     return Issue(
         rule_id=rule_id,
         action=action,
         object_name=object_name,
-        key=key,
+        keys=(key,) if isinstance(key, str) else tuple(key),
         field=field_name,
         message=message,
     )
@@ -293,7 +312,7 @@ def cleanse_materials(
             )
             keys = [source_key(row, "MATNR") for row in undecided]
             result.issues.append(
-                _issue("DQ-MAT-008", Action.WARN, "materials", ", ".join(keys),
+                _issue("DQ-MAT-008", Action.WARN, "materials", keys,
                        "MAKTX",
                        f"duplicate material description '{description}' "
                        f"{scope}, confirm the harmonisation decision")
@@ -409,7 +428,7 @@ def _reject_undecided_collisions(
             "in both source systems" if len(systems) > 1
             else f"more than once within {next(iter(systems))}"
         )
-        keys = ", ".join(source_key(row, "MATNR") for row in undecided)
+        keys = [source_key(row, "MATNR") for row in undecided]
         held.update(material_lookup_key(row) for row in undecided)
         # A ruling that these are two products does not resolve this:
         # the target product number is the bare MATNR and only one
@@ -635,7 +654,7 @@ def cleanse_partners(
                 else f"within {next(iter(systems))}"
             )
             result.issues.append(
-                _issue(f"{prefix}-007", Action.WARN, object_name, ", ".join(keys),
+                _issue(f"{prefix}-007", Action.WARN, object_name, keys,
                        "NAME1",
                        f"records merge into one business partner {scope}: "
                        f"{identity[0]}")
@@ -663,7 +682,7 @@ def cleanse_partners(
         if len(by_system) > 1 and len({identity for _, identity, _ in entries}) > 1:
             result.issues.append(
                 _issue(f"{prefix}-008", Action.WARN, object_name,
-                       ", ".join(key for key, _, _ in entries), key_field,
+                       [key for key, _, _ in entries], key_field,
                        f"number {number} exists in both source systems as "
                        f"different entities ({_named(entries)}); it must "
                        "not be reused as the business partner number")
@@ -681,7 +700,7 @@ def cleanse_partners(
                 continue
             result.issues.append(
                 _issue(f"{prefix}-009", Action.REJECT, object_name,
-                       ", ".join(key for key, _, _ in group), key_field,
+                       [key for key, _, _ in group], key_field,
                        f"number {number} is held more than once in {system} "
                        f"for different entities ({_named(group)}); the extract "
                        "cannot be loaded until it is corrected")
@@ -700,10 +719,30 @@ def cleanse_partners(
     return result
 
 
+def held_partner_refs(result: CleanseResult, partner_type: str) -> dict[str, str]:
+    """Partner references cleansing held back, and the rule that held them.
+
+    An open item naming one of these is not naming a partner the
+    extract forgot. The record was read and deliberately withheld, so
+    `DQ-FI-002`'s instruction - go and find the master - is work that
+    cannot be done, and the same misdiagnosis `DQ-STK-006` exists to
+    prevent on the stock side.
+    """
+    return {
+        partner_ref(system, partner_type, number): issue.rule_id
+        for issue in result.issues
+        if issue.action is Action.REJECT
+        for system, number in (split_source_key(key) for key in issue.keys)
+    }
+
+
 def cleanse_open_items(
-    rows: list[dict[str, str]], known_partners: set[str]
+    rows: list[dict[str, str]],
+    known_partners: set[str],
+    held_partners: dict[str, str] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="open_items")
+    held = held_partners or {}
     documents: dict[tuple[str, str, str, str], list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
@@ -742,19 +781,31 @@ def cleanse_open_items(
             # neither C nor V matches nothing and is held here too - a
             # line that cannot say which of the two it means cannot be
             # resolved to a business partner at all.
-            if partner and partner_ref(
-                line["SOURCE_SYSTEM"], partner_type, partner
-            ) not in known_partners:
+            reference = (
+                partner_ref(line["SOURCE_SYSTEM"], partner_type, partner)
+                if partner
+                else ""
+            )
+            if partner and reference not in known_partners:
                 reject_document = True
                 account = (
                     f"{PARTNER_ACCOUNTS[partner_type]} " if partner_type in PARTNER_TYPES
                     else f"account type '{partner_type}' "
                 )
-                result.issues.append(
-                    _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
-                           f"{account}{partner} is not in the migrated master "
-                           f"data for {system}")
-                )
+                rule = held.get(reference)
+                if rule is not None:
+                    result.issues.append(
+                        _issue("DQ-FI-004", Action.REJECT, "open_items", key, "PARTNER",
+                               f"{account}{partner} is held back from the load "
+                               f"by {rule}; this document posts once that is "
+                               "resolved")
+                    )
+                else:
+                    result.issues.append(
+                        _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
+                               f"{account}{partner} is not in the migrated master "
+                               f"data for {system}")
+                    )
             # Raised once for the document, which is what the exception
             # is keyed on: a second partner line with the same gap is
             # the same exception, and counting it twice inflates the

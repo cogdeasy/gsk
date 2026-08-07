@@ -378,6 +378,11 @@ def map_open_item(row: dict[str, str], xref: dict[str, str]) -> dict[str, str]:
         "GLAccount": row["HKONT"],
         "BusinessPartner": xref.get(partner_key, ""),
         "SourcePartner": row["PARTNER"],
+        # The number alone does not say which record it came from, and
+        # the evidence file is read without the pipeline beside it:
+        # with the system column, this is what makes the resolution
+        # traceable back to one customer or one vendor.
+        "SourcePartnerType": row["PARTNER_TYPE"],
         "DebitCreditCode": row["SHKZG"],
         "AmountInCompanyCodeCurrency": row["DMBTR"],
         "CompanyCodeCurrency": row["WAERS"],

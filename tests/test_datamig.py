@@ -251,6 +251,51 @@ def test_a_record_already_rejected_is_not_held_a_second_time():
     assert outcome.source_count == 2
 
 
+def test_an_open_item_behind_a_held_partner_is_not_sent_looking_for_it():
+    """The master was read and withheld, not missed.
+
+    `DQ-FI-002` tells a steward to go and find it, which is the one
+    thing that cannot be done: the record is in the extract and the
+    programme decided it may not load.
+    """
+    def customer(number: str, name: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": number, "NAME1": name,
+            "LAND1": "GB", "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    def line(buzei: str, shkzg: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "BUKRS": "GB01", "BELNR": "1900000001",
+            "GJAHR": "2026", "BUZEI": buzei, "BLART": "RV", "HKONT": "140000",
+            "PARTNER": "0000210045", "PARTNER_TYPE": "C", "SHKZG": shkzg,
+            "DMBTR": "100.00", "WAERS": "GBP", "BUDAT": "20260615",
+            "ZFBDT": "20260715",
+        }
+
+    partners = cleanse.cleanse_partners(
+        [
+            customer("0000210045", "NHS SUPPLY CHAIN"),
+            customer("0000210045", "BOOTS UK LTD"),
+        ],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+    held = cleanse.held_partner_refs(partners, "C")
+    assert held == {"GEP/C/0000210045": "DQ-CUS-009"}
+
+    outcome = cleanse.cleanse_open_items(
+        [line("001", "S"), line("002", "H")], set(), held
+    )
+    cascade = outcome.issues_for("DQ-FI-004")
+    assert len(cascade) == 2
+    assert "DQ-CUS-009" in cascade[0].message
+    assert outcome.issues_for("DQ-FI-002") == []
+    assert outcome.accepted == []
+
+
 def test_one_undated_document_raises_one_warning():
     """Two lines of one document with no baseline date are one gap."""
     def line(buzei: str, shkzg: str) -> dict[str, str]:
