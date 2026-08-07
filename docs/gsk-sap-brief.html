@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSK: SAP Landscape &amp; Migration Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;460;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-root: 16px;
+  --weight-normal: 460; --weight-medium: 500; --weight-semibold: 600;
+  --leading-tight: 1.25; --leading-body: 20px;
+  --body-color: #111; --body-color-secondary: #1f1f1f; --body-bg: #fdfdfc;
+  --text-muted: rgba(0, 0, 0, 0.4); --text-code: rgba(0, 0, 0, 0.75);
+  --bg-code: #f8f8f8; --border-light: rgba(0, 0, 0, 0.06);
+  --spacing-xxs: 0.5rem; --spacing-xs: 0.75rem; --spacing-sm: 1rem; --spacing-md: 1.5rem;
+  --spacing-lg: 2rem; --spacing-xl: 2.5rem; --spacing-xxl: 3.5rem; --spacing-section: 64px;
+  --sidebar-width: auto; --sidebar-top: 5rem; --sidebar-left: 5rem;
+  --article-max-width: 706px; --breakpoint-sidebar: 1080px;
+  --duration-snappy: 220ms; --ease-snappy: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --radius-block: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: var(--text-root); }
+body {
+  font-family: var(--font-body); font-size: var(--text-base); font-weight: var(--weight-normal);
+  line-height: var(--leading-body); color: var(--body-color); background: var(--body-bg);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+aside { position: fixed; top: var(--sidebar-top); left: var(--sidebar-left); display: flex; flex-direction: column; gap: var(--spacing-xs); }
+aside .aside-home { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-sm); color: var(--body-color); text-decoration: none; font-weight: var(--weight-medium); margin-bottom: var(--spacing-md); }
+aside nav { display: flex; flex-direction: column; gap: 0.25rem; }
+aside nav a { font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; font-weight: var(--weight-normal); padding: 2px 0; transition: color var(--duration-snappy) var(--ease-snappy); }
+aside nav a:hover { color: var(--body-color); }
+main { max-width: var(--article-max-width); margin: 0 auto; padding: var(--sidebar-top) var(--spacing-lg); }
+article header { margin-bottom: var(--spacing-sm); }
+article header h1 { font-size: var(--text-base); font-weight: var(--weight-medium); line-height: var(--leading-body); }
+article header time { font-size: var(--text-base); color: var(--text-muted); }
+article section { margin-top: var(--spacing-lg); }
+article section h1 { font-size: var(--text-base); font-weight: var(--weight-semibold); line-height: var(--leading-body); padding-top: var(--spacing-section); margin-bottom: var(--spacing-sm); }
+article p { font-size: var(--text-base); line-height: var(--leading-body); font-weight: var(--weight-normal); color: var(--body-color); margin-bottom: var(--spacing-sm); }
+article ul, article ol { margin: 0 0 var(--spacing-sm) 1.25rem; }
+article li { font-size: var(--text-base); line-height: var(--leading-body); margin-bottom: var(--spacing-xxs); }
+article a { color: var(--body-color); text-decoration: underline; text-decoration-color: var(--text-muted); text-underline-offset: 2px; }
+article a:hover { text-decoration-color: var(--body-color); }
+sup a { text-decoration: none; color: var(--text-muted); font-size: var(--text-xs); }
+code { font-family: var(--font-mono); font-size: 12.6px; color: var(--text-code); background: var(--bg-code); padding: 2px 5px; border-radius: 4px; }
+.brandbar { display: flex; align-items: center; gap: var(--spacing-xs); padding-bottom: var(--spacing-md); margin-bottom: var(--spacing-lg); border-bottom: 1px solid var(--border-light); }
+.brandbar .brand { display: inline-flex; align-items: center; gap: 0.5rem; }
+.brandbar .brandmark { width: 22px; height: 22px; display: block; flex: none; }
+.brandbar .brandname { font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: -0.01em; color: var(--body-color); }
+.brandbar .brand-sep { width: 1px; height: 16px; background: var(--border-light); margin: 0 0.25rem; flex: none; }
+.brandbar .brand-account { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--body-color); }
+.footnote { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--spacing-xxs); }
+@media (max-width: 1080px) {
+  aside { position: static; padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-lg); }
+  main { padding: 0 var(--spacing-lg) var(--spacing-lg); }
+}
+</style>
+</head>
+<body>
+<aside>
+  <a href="#" class="aside-home"><span>Index</span></a>
+  <nav>
+    <a href="#manish">Manish Varma</a>
+    <a href="#landscape">GSK's SAP Landscape</a>
+    <a href="#programme">ERP Evolution</a>
+    <a href="#entail">What a Migration Entails</a>
+    <a href="#cognition">Where Cognition Fits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</aside>
+<main>
+<article>
+  <div class="brandbar">
+    <span class="brand brand-cognition">
+      <svg class="brandmark" width="20" height="20" viewBox="-0.747952 -0.722232 21.495942 21.477469" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+<g>
+<path fill="#111" d="M13.2603 8.85657C13.6689 8.62171 14.174 8.62171 14.5826 8.85657L15.6386 9.46628C15.6723 9.48514 15.7089 9.5 15.746 9.51028C15.7534 9.51314 15.7609 9.51485 15.7694 9.516C15.806 9.52457 15.8431 9.52914 15.8797 9.53085H15.8854C15.89 9.53085 15.8929 9.53085 15.8974 9.52914C15.9311 9.52914 15.9649 9.52343 15.9986 9.516C16.0043 9.516 16.0106 9.51428 16.0163 9.51143C16.0517 9.50114 16.0866 9.48628 16.1191 9.46914C16.122 9.46743 16.1266 9.46628 16.1294 9.46457L18.2403 8.24514C18.3917 8.15828 18.4843 7.99714 18.4843 7.82228V5.384C18.4843 5.20914 18.3917 5.04742 18.2403 4.96114L16.1294 3.74171C15.978 3.65485 15.7917 3.65485 15.6403 3.74171L13.5294 4.96114C13.5294 4.96114 13.5237 4.96571 13.5209 4.96685C13.4889 4.98571 13.4574 5.00971 13.4311 5.036C13.4266 5.04057 13.4237 5.04457 13.4191 5.04914C13.3957 5.07428 13.3751 5.10228 13.3563 5.13142C13.3534 5.136 13.3506 5.14 13.3477 5.14628C13.33 5.17885 13.3151 5.21257 13.3049 5.24914C13.302 5.25657 13.3003 5.264 13.2991 5.27257C13.2906 5.30914 13.2843 5.34742 13.2843 5.38742V6.60685C13.2843 7.07714 13.0317 7.516 12.6231 7.75085C12.2146 7.98571 11.7094 7.98571 11.3009 7.75085L10.2449 7.14114C10.2111 7.12228 10.1746 7.10742 10.1374 7.09714C10.13 7.09428 10.1226 7.09257 10.114 7.09142C10.0774 7.08285 10.0403 7.07828 10.0037 7.07657H9.98771C9.95228 7.07657 9.91857 7.08228 9.88485 7.08971C9.87914 7.08971 9.87285 7.09142 9.86885 7.09257C9.83228 7.10285 9.79857 7.11771 9.76428 7.13542C9.76142 7.13714 9.75685 7.13828 9.75399 7.14L7.64314 8.35942C7.49171 8.44628 7.39914 8.60742 7.39914 8.78228V11.2206C7.39914 11.3954 7.49171 11.5571 7.64314 11.6434L9.75399 12.8629C9.75399 12.8629 9.76142 12.8657 9.76428 12.8674C9.79799 12.8851 9.83171 12.9 9.86885 12.9103C9.87457 12.912 9.88085 12.9131 9.88657 12.9149C9.92028 12.9223 9.95399 12.9269 9.98771 12.928C9.99228 12.928 9.99514 12.9297 9.99971 12.9297H10.0054C10.042 12.9297 10.0791 12.924 10.1157 12.9149C10.1231 12.9131 10.1306 12.9103 10.1391 12.9091C10.1757 12.8989 10.2111 12.884 10.2466 12.8651L11.3026 12.2554C11.7111 12.0206 12.2163 12.0206 12.6243 12.2554C13.0311 12.4903 13.2854 12.9297 13.2854 13.4V14.6194C13.2854 14.6589 13.2911 14.6971 13.3003 14.7337C13.302 14.7411 13.3031 14.7497 13.306 14.7571C13.3163 14.7926 13.3311 14.8274 13.3483 14.86C13.3511 14.8646 13.354 14.8686 13.3574 14.8749C13.3751 14.904 13.3957 14.932 13.4209 14.9571C13.4254 14.9617 13.4283 14.9657 13.4329 14.9703C13.4591 14.9966 13.49 15.0189 13.5226 15.0394C13.5254 15.0411 13.5283 15.044 13.5311 15.0451L15.642 16.2646C15.7169 16.3086 15.802 16.3309 15.886 16.3309C15.97 16.3309 16.0551 16.3086 16.13 16.2646L18.2409 15.0451C18.3923 14.9583 18.4849 14.7971 18.4849 14.6223V12.184C18.4849 12.0091 18.3923 11.8474 18.2409 11.7611L16.13 10.5417C16.13 10.5417 16.1226 10.5389 16.1197 10.5371C16.086 10.5194 16.0523 10.5046 16.0157 10.4943C16.01 10.4931 16.0054 10.4931 15.9997 10.4914C15.966 10.4829 15.9306 10.4783 15.8969 10.4783H15.8809C15.8443 10.4783 15.8077 10.484 15.7706 10.4931C15.7631 10.4949 15.7557 10.4977 15.7489 10.4989C15.7123 10.5091 15.6769 10.524 15.6414 10.5429L14.5854 11.1526C14.1786 11.3874 13.6717 11.3874 13.2637 11.1526C12.8569 10.9177 12.6026 10.4783 12.6026 10.008C12.6026 9.53771 12.8551 9.09885 13.2637 8.86343L13.262 8.85771L13.2603 8.85657Z" fill="black"/>
+<path fill="#111" d="M1.75971 8.24743L3.87057 9.46685C3.94542 9.51085 4.03057 9.53314 4.11457 9.53314C4.19857 9.53314 4.28371 9.51085 4.35857 9.46685L6.46942 8.24743C6.46942 8.24743 6.47514 8.24285 6.47799 8.24171C6.51057 8.22285 6.54085 8.19885 6.56771 8.17257C6.57228 8.168 6.57514 8.164 6.57971 8.15942C6.60314 8.13428 6.62371 8.10628 6.64314 8.07714C6.64599 8.07257 6.64885 8.06857 6.65171 8.06228C6.66942 8.02971 6.68428 7.996 6.69457 7.95942C6.69742 7.952 6.69914 7.94457 6.70028 7.936C6.70885 7.89943 6.71514 7.86114 6.71514 7.82171V6.60228C6.71514 6.132 6.96771 5.69314 7.37628 5.45828C7.78485 5.22342 8.28999 5.22342 8.69857 5.45828L9.75457 6.068C9.78828 6.08685 9.82485 6.10171 9.86199 6.112C9.86942 6.11485 9.87685 6.11657 9.88542 6.11771C9.92199 6.12628 9.95742 6.13085 9.99571 6.13257H10.0014C10.006 6.13257 10.0089 6.13085 10.0134 6.13085C10.0471 6.13085 10.0809 6.12514 10.1146 6.11771C10.1203 6.11771 10.1266 6.116 10.1323 6.11314C10.1689 6.10285 10.2026 6.088 10.2369 6.07028C10.2397 6.06914 10.2443 6.06742 10.2471 6.06571L12.358 4.84628C12.5094 4.75942 12.602 4.59828 12.602 4.42342V1.98514C12.602 1.81028 12.5094 1.64857 12.358 1.56228L10.2471 0.342853C10.0957 0.255996 9.90942 0.255996 9.75799 0.342853L7.64714 1.56228C7.64714 1.56228 7.64142 1.56685 7.63857 1.568C7.60657 1.58685 7.57571 1.61085 7.54885 1.63714C7.54428 1.64171 7.54142 1.64571 7.53685 1.65028C7.51342 1.67542 7.49285 1.70342 7.47342 1.73257C7.47057 1.73714 7.46771 1.74114 7.46485 1.74742C7.44714 1.78 7.43228 1.81371 7.42199 1.85028C7.41914 1.85771 7.41742 1.86514 7.41628 1.87371C7.40714 1.91028 7.40142 1.94857 7.40142 1.98857V3.208C7.40142 3.67828 7.14885 4.11714 6.74028 4.35257C6.33342 4.58742 5.82657 4.58742 5.41799 4.35257L4.36199 3.74285C4.32828 3.724 4.29171 3.70914 4.25457 3.69885C4.24714 3.696 4.23971 3.69428 4.23114 3.69314C4.19457 3.68457 4.15742 3.68 4.12085 3.67828H4.10485C4.06942 3.67828 4.03571 3.684 4.00199 3.69142C3.99628 3.69142 3.98999 3.69314 3.98599 3.69428C3.94942 3.70457 3.91571 3.71942 3.88142 3.73714C3.87857 3.73885 3.87399 3.74 3.87114 3.74171L1.76028 4.96114C1.60885 5.048 1.51628 5.20914 1.51628 5.384V7.82228C1.51628 7.99714 1.60885 8.15885 1.76028 8.24514V8.248L1.75971 8.24743Z" fill="black"/>
+<path fill="#111" d="M12.3551 15.1514L10.2443 13.932C10.2443 13.932 10.2369 13.9291 10.234 13.9274C10.2003 13.9097 10.1666 13.8954 10.1294 13.8851C10.1237 13.8834 10.1174 13.8823 10.1117 13.8806C10.078 13.8731 10.0443 13.8674 10.0089 13.8674H9.99285C9.95628 13.8674 9.91914 13.8731 9.88257 13.8823C9.87514 13.884 9.86771 13.8869 9.86028 13.888C9.82371 13.8983 9.78828 13.9131 9.75285 13.932L8.69685 14.5417C8.28999 14.7766 7.78314 14.7766 7.37628 14.5417C6.96771 14.3069 6.71514 13.8674 6.71514 13.3971V12.1777C6.71514 12.1383 6.70942 12.1 6.70028 12.0629C6.69914 12.0554 6.69742 12.0469 6.69457 12.0394C6.68428 12.004 6.66942 11.9691 6.65171 11.9366C6.64885 11.932 6.64599 11.928 6.64314 11.9217C6.62542 11.8926 6.60485 11.8646 6.57971 11.8394C6.57514 11.8349 6.57228 11.8309 6.56828 11.8263C6.54199 11.8 6.51114 11.7777 6.47857 11.7571C6.47571 11.7554 6.47285 11.7526 6.46999 11.7514L4.35914 10.532C4.20771 10.4451 4.02142 10.4451 3.86999 10.532L1.75914 11.7514C1.60771 11.8383 1.51514 11.9994 1.51514 12.1743V14.6126C1.51514 14.7874 1.60771 14.9491 1.75914 15.0354L3.86999 16.2549C3.86999 16.2549 3.87742 16.2577 3.88028 16.2594C3.91399 16.2771 3.94771 16.2914 3.98314 16.3017C3.98885 16.3034 3.99514 16.3046 4.00085 16.3063C4.03457 16.3137 4.06714 16.3183 4.10199 16.3194C4.10657 16.3194 4.11057 16.3206 4.11399 16.3206H4.11971C4.15628 16.3206 4.19342 16.3149 4.22828 16.3057C4.23571 16.304 4.24428 16.3011 4.25171 16.3C4.28828 16.2897 4.32371 16.2749 4.35914 16.256L5.41514 15.6463C5.82371 15.4114 6.32885 15.4114 6.73742 15.6463C7.14428 15.8811 7.39857 16.3206 7.39857 16.7909V18.0103C7.39857 18.0497 7.40428 18.088 7.41342 18.1251C7.41514 18.1326 7.41628 18.1411 7.41914 18.1486C7.42942 18.184 7.44428 18.2189 7.46199 18.2514C7.46485 18.256 7.46771 18.26 7.47057 18.2663C7.48828 18.2954 7.50885 18.3234 7.53399 18.3486C7.53857 18.3531 7.54142 18.3571 7.54542 18.3617C7.57171 18.388 7.60257 18.4103 7.63514 18.4309C7.63799 18.4326 7.64085 18.4354 7.64428 18.4366L9.75514 19.656C9.82999 19.7 9.91514 19.7223 9.99914 19.7223C10.0831 19.7223 10.1683 19.7 10.2431 19.656L12.354 18.4366C12.5054 18.3497 12.598 18.1886 12.598 18.0137V15.5754C12.598 15.4006 12.5054 15.2389 12.354 15.1526L12.3551 15.1514Z" fill="black"/>
+</g>
+
+</svg>
+
+      <span class="brandname">Cognition</span>
+    </span>
+    <span class="brand-sep" aria-hidden="true"></span>
+    <span class="brand-account">GSK</span>
+  </div>
+  <header>
+    <h1>GSK: Manish Varma, the SAP Estate, and the S/4HANA Migration</h1>
+    <time>Prepared for Ciaran Deasy, Cognition AI &middot; August 2026</time>
+  </header>
+
+  <section id="intro">
+    <p>This brief is preparation for the meeting with Manish Varma (manish.x.varma@gsk.com). It covers who Manish is and how ERP fits his remit, what GSK's SAP estate almost certainly looks like today, the S/4HANA migration GSK is already running (the "ERP Evolution" programme), and what that migration entails in practice — the workstreams where Cognition can be relevant.</p>
+  </section>
+
+  <section id="manish">
+    <h1>Manish Varma: Role and Background</h1>
+    <p>Manish Varma is Global Vice President &amp; Enterprise Head of Data &amp; Analytics at GSK, based in Philadelphia, in post since January 2022.<sup><a href="#fn1">1</a></sup> His LinkedIn headline is telling: "Global Technology &amp; AI Executive | CIO | CDTO | Driving Enterprise Growth through AI Innovation, Data Foundation &amp; ERP Modernization." ERP modernization is explicitly part of how he frames his mandate — he owns the enterprise data foundation that an ERP migration both depends on and feeds.</p>
+    <p>His career is deeply ERP- and pharma-native. He was a Pharma ERP Data Warehouse Architect at Bristol-Myers Squibb (1999–2001), then spent ~15 years at Johnson &amp; Johnson rising to VP of IT — J&amp;J being one of the largest global SAP estates in life sciences. He was Chief Strategy Officer at ArisGlobal (drug-safety SaaS), then CEO of Mareana, an AI/data startup focused on pharma manufacturing and supply-chain intelligence — i.e., extracting value from exactly the kind of data locked in ERP and MES systems. Wharton MBA, IIT Kanpur engineering.<sup><a href="#fn1">1</a></sup></p>
+    <p>His public writing emphasises that enterprise AI advantage comes from proprietary data and operating context, that "data is capital; if it isn't trusted and decision-ready, AI will fail," and that AI only creates value when it changes how work gets done.<sup><a href="#fn2">2</a></sup> Expect him to evaluate any migration tooling through that lens: does it make GSK's core data decision-ready and does it change how the work is actually executed.</p>
+    <p>Practical implication: Manish is unlikely to be the day-to-day owner of the S/4HANA programme delivery (that sits with GSK Tech programme leadership under CDTO Shobie Ramakrishnan), but as enterprise head of Data &amp; Analytics he owns the data foundation the migration must not break — master data, analytics continuity, and the AI agenda layered on top. He is a strong internal champion candidate for AI-assisted engineering on the programme.</p>
+  </section>
+
+  <section id="landscape">
+    <h1>GSK's Likely SAP Set-Up Today</h1>
+    <p>GSK's current estate is well documented and unusually consolidated for its size:</p>
+    <ul>
+      <li><strong>A single global SAP ECC 6.0 core.</strong> GSK ran a decade-long "ERP unification" onto SAP ECC worldwide, completed through wave deployments across the 2010s. By 2021 its global ERP competency centre described a unified ECC instance — but process mining (Celonis) revealed ~28,000 process variants for a single sales-order process, i.e., a nominally unified system with enormous embedded process and custom-code complexity.<sup><a href="#fn3">3</a></sup></li>
+      <li><strong>Massive operational footprint on that core.</strong> ~37 manufacturing sites, 1.7bn packs of medicines and ~409m vaccine doses shipped in 2024, operations across 75+ countries, with ECC driving manufacturing, supply chain, finance, procurement (Ariba), intercompany profit tracking (ICT), and even label printing at 3,500+ printers via Loftware integrated to ECC.<sup><a href="#fn4">4</a></sup></li>
+      <li><strong>Heavily GxP-regulated.</strong> The ERP is a validated system under pharma GMP rules — every change requires computer-system validation, which is the single biggest cost multiplier versus a non-pharma migration.</li>
+      <li><strong>Deadline pressure.</strong> Mainstream maintenance for ECC 6.0 ends in 2027 (extended support to 2030), which is the forcing function behind the current programme.<sup><a href="#fn5">5</a></sup></li>
+    </ul>
+    <p>Reasonable inference on surroundings: SAP BW/analytics feeding the enterprise data platform Manish owns, Ariba for procurement, a large bespoke ABAP layer (the 28k variants imply years of Z-code accretion), and hundreds of interfaces to MES, LIMS, serialization/track-and-trace, and logistics partners.</p>
+  </section>
+
+  <section id="programme">
+    <h1>The Migration Already Underway: ERP Evolution</h1>
+    <p>GSK is not deciding whether to migrate — it is mid-flight. GSK's "ERP Evolution" programme (also referenced internally as "ERP Together") is deploying S/4HANA globally in waves across Pharma and Vaccines: commercial markets, manufacturing sites, R&amp;D, shared financial services, plus customers, suppliers and logistics partners. A "Wave 0" covers a representative subset first; programme secondments run to end-2027.<sup><a href="#fn6">6</a></sup></p>
+    <p>Public staff profiles indicate the target is <strong>S/4HANA on RISE with SAP</strong> (SAP-managed cloud), and that the programme has completed Blueprint and Confirm phases and is currently in <strong>Realization</strong> — system sizing, application architecture, integration planning done; build, test, data migration and wave cutovers now in progress.<sup><a href="#fn7">7</a></sup> GSK is hiring ERP Process Directors (Logistics, Planning), PMO/cutover leads, integration leads and data SMEs on fixed terms to December 2027 — a classic multi-year, multi-wave brownfield-plus-redesign programme.</p>
+  </section>
+
+  <section id="entail">
+    <h1>What the Migration Entails</h1>
+    <p>For an estate like GSK's, an ECC → S/4HANA migration decomposes into these workstreams:</p>
+    <ul>
+      <li><strong>Custom code remediation.</strong> Years of custom ABAP (Z-programs, user exits, enhancements) must be inventoried, assessed against S/4 simplifications (e.g., new data model: <code>MATDOC</code>, <code>ACDOCA</code>, business partner mandate), and either retired, remediated, or rebuilt as clean-core extensions on BTP. At GSK's scale this is tens of thousands of objects.</li>
+      <li><strong>Process standardisation.</strong> The 28,000 sales-order variants are the real migration problem: each wave forces a decision to adopt the global template or justify a deviation. Process mining, fit-gap workshops, and template governance per market/site.</li>
+      <li><strong>Data migration &amp; master data cleansing.</strong> Material masters, BOMs, recipes, vendors/customers (business-partner conversion), open items, batch/serialization data — extracted, cleansed, mapped and loaded per wave, with reconciliation evidence. This is squarely Manish's territory: the migration is also the once-a-decade chance to make core data "decision-ready."</li>
+      <li><strong>Interface re-pointing.</strong> Hundreds of integrations (MES, LIMS, Loftware labeling, Ariba, banks, 3PLs, EDI with customers/suppliers) re-built or re-tested per wave.</li>
+      <li><strong>GxP validation &amp; testing.</strong> Every remediated object, interface and process needs documented test evidence; regression suites run per wave and per release. Typically 30–40% of programme effort in pharma.</li>
+      <li><strong>Cutover &amp; hypercare per wave.</strong> Rehearsed cutovers (GSK is hiring dedicated cutover leads), stock/finance reconciliation, hypercare, then the next wave — repeated across ~37 sites and dozens of markets through 2027+.</li>
+      <li><strong>Change management &amp; training</strong> for tens of thousands of users, plus benefits tracking.</li>
+    </ul>
+  </section>
+
+  <section id="cognition">
+    <h1>Where Cognition Fits</h1>
+    <p>The labour-intensive, pattern-heavy middle of this programme is where Devin is strongest:</p>
+    <ul>
+      <li><strong>ABAP custom-code analysis and remediation at scale</strong> — triaging simplification-item hits, mechanically remediating deprecated patterns, migrating to clean-core/BTP extensions, with each change as a reviewable PR.</li>
+      <li><strong>Test asset generation</strong> — building and maintaining automated regression suites and validation documentation drafts per wave, cutting the GxP testing burden.</li>
+      <li><strong>Data migration engineering</strong> — writing and iterating extraction/cleansing/mapping pipelines and reconciliation reports; directly supports Manish's "trusted, decision-ready data" agenda.</li>
+      <li><strong>Interface remediation</strong> — repetitive re-pointing and re-testing of hundreds of integrations per wave.</li>
+    </ul>
+    <p>Proof point for a GxP audience: <a href="https://devin.ai/customers/evinova">Evinova</a> (AstraZeneca group, 21 CFR Part 11 environment) uses Devin in production — 8x faster GxP documentation, 3x faster code migrations, 66% of bugs fixed autonomously in the first 10 days, and test automation compressed from quarters to weeks.<sup><a href="#fn8">8</a></sup></p>
+    <p>Framing for Manish specifically: less "we can help run your SAP programme" (owned elsewhere in GSK Tech), more "AI software agents can compress the engineering long-tail of ERP Evolution — code remediation, test generation, data pipelines — while raising the quality of the data foundation your AI strategy depends on." That maps exactly onto his stated thesis that AI must change how work gets done.</p>
+  </section>
+
+  <section id="sources">
+    <h1>Sources</h1>
+    <p class="footnote" id="fn1">1. LinkedIn — Manish Varma (linkedin.com/in/mvarma): role, headline, career history.</p>
+    <p class="footnote" id="fn2">2. Manish Varma, LinkedIn posts (Dec 2025) on enterprise AI value and data as capital.</p>
+    <p class="footnote" id="fn3">3. The Register (Apr 2021), "GSK opens Pandora's Box of its SAP system to find 28,000 variations on a process" — global ECC unification and Celonis findings.</p>
+    <p class="footnote" id="fn4">4. GSK job postings (ERP Process Director – Logistics/Planning; GSC ERP PMO/Cutover Lead; ICT Deployment SME); Loftware GSK webinar (2024); The Resolution Engine GSK case study.</p>
+    <p class="footnote" id="fn5">5. SAP ECC 6.0 mainstream maintenance timeline; excelerateds2p, "SAP ECC6 to S/4HANA Migration at GSK."</p>
+    <p class="footnote" id="fn6">6. GSK "ERP Evolution Program" job descriptions (Built In, Dec 2025–Mar 2026): S/4HANA deployed globally in waves; Wave 0 scope; secondments to Dec 2027.</p>
+    <p class="footnote" id="fn7">7. LinkedIn — GSK staff profiles (S/4HANA technical workstream lead: S/4HANA RISE, Realization phase after Blueprint/Confirm; Senior Director S/4 HANA ERP Deployment Delivery Lead; Integration Lead "ERP Together").</p>
+    <p class="footnote" id="fn8">8. Devin customer case study — Evinova (AstraZeneca group), devin.ai/customers/evinova (July 2026).</p>
+    <p class="footnote">Note: items marked as inference (surrounding landscape, programme ownership) are reasoned from public evidence, not confirmed by GSK.</p>
+  </section>
+</article>
+</main>
+</body>
+</html>

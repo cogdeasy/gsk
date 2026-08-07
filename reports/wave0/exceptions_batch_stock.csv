@@ -1,0 +1,13 @@
+rule_id,action,object,key,field,message
+DQ-STK-004,warn,batch_stock,GB21/000000000000100234/B2500118,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GB21/000000000000100238/A2500044,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GB21/000000000000100241/H2500077,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,BE31/000000000000100236/V2500209,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-001,reject,batch_stock,BE31/000000000000100237/V2500215,MATNR,stock for a material that is not in the migrated master
+DQ-STK-004,warn,batch_stock,BE31/000000000000100244/V2500221,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-001,reject,batch_stock,BE31/000000000000100251/H2500301,MATNR,stock for a material that is not in the migrated master
+DQ-STK-004,warn,batch_stock,BE31/000000000000100251/H2500301,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GB22/000000000000100243/B2500341,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-002,reject,batch_stock,GB23/000000000000100247/C2500501,CHARG,batch stock for a material that is not batch managed
+DQ-STK-002,reject,batch_stock,GB21/000000000000100240/P2500601,CHARG,batch stock for a material that is not batch managed
+DQ-STK-001,reject,batch_stock,GB21/000000000000100999/B2500777,MATNR,stock for a material that is not in the migrated master

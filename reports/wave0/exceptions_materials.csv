@@ -1,0 +1,7 @@
+rule_id,action,object,key,field,message
+DQ-MAT-001,fix,materials,000000000000100235,MEINS,base unit 'st' upper-cased
+DQ-MAT-006,reject,materials,000000000000100237,MHDHB,batch managed material without total shelf life (GMP)
+DQ-MAT-007,fix,materials,000000000000100238,MAKTX,description normalised to upper case
+DQ-MAT-005,warn,materials,000000000000100243,BRGEW,"gross weight is missing, loaded as zero"
+DQ-MAT-004,reject,materials,000000000000100251,GEWEI,gross weight supplied without a weight unit
+DQ-MAT-008,warn,materials,"000000000000100247, 000000000000100248",MAKTX,duplicate material description 'SENSODYNE REPAIR PROTECT 75ML'

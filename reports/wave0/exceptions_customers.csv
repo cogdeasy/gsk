@@ -1,0 +1,5 @@
+rule_id,action,object,key,field,message
+DQ-CUS-001,fix,customers,0000210047,LAND1,country 'gb' upper-cased
+DQ-CUS-004,warn,customers,0000210049,PSTLZ,"postal code missing, address will not be validated"
+DQ-CUS-003,reject,customers,0000210060,LAND1,'XX' is not a valid ISO country code
+DQ-CUS-007,warn,customers,"0000210046, 0000210058",NAME1,records merge into one business partner: ALLIANCE HEALTHCARE UK
