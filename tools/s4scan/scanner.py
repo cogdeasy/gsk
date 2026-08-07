@@ -74,6 +74,14 @@ class ObjectResult:
         return self.entry.gxp_class if self.entry else "unclassified"
 
     @property
+    def is_remediated(self) -> bool:
+        return self.entry.is_remediated if self.entry else False
+
+    @property
+    def remediated_path(self) -> str:
+        return self.entry.remediated_path if self.entry else ""
+
+    @property
     def worst_severity(self) -> Severity | None:
         if not self.findings:
             return None
@@ -119,9 +127,19 @@ class ScanResult:
     def objects_with_findings(self) -> list[ObjectResult]:
         return [obj for obj in self.objects if obj.findings]
 
+    def outstanding(self) -> list[ObjectResult]:
+        """Objects still to remediate: findings and no S/4HANA successor."""
+        return [obj for obj in self.objects_with_findings() if not obj.is_remediated]
+
+    def remediated(self) -> list[ObjectResult]:
+        return [obj for obj in self.objects if obj.is_remediated]
+
     def has_severity(self, severity: Severity) -> bool:
+        """Gate on outstanding work only; remediated objects are done."""
         return any(
-            finding.severity.rank <= severity.rank for finding in self.findings
+            finding.severity.rank <= severity.rank
+            for obj in self.outstanding()
+            for finding in obj.findings
         )
 
 

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .inventory import Inventory
-from .report import to_json, to_markdown
+from .report import build_backlog, count_by_rule, count_by_severity, to_json, to_markdown
 from .rules import RuleFilter, Severity, all_rules
 from .scanner import scan
 
@@ -123,18 +123,20 @@ def _run_scan(args: argparse.Namespace) -> int:
 
 
 def _summary(result) -> str:
-    counts = result.count_by_severity()
+    backlog = build_backlog(result)
+    counts = count_by_severity(backlog)
     lines = [
         f"objects scanned      : {len(result.objects)}",
-        f"objects with findings: {len(result.objects_with_findings())}",
+        f"objects remediated   : {len(result.remediated())}",
+        f"objects outstanding  : {len(backlog)}",
         f"effective LOC        : {result.scanned_loc}",
-        f"findings             : {len(result.findings)}",
+        f"findings outstanding : {sum(len(obj.findings) for obj in backlog)}",
     ]
     for severity, count in counts.items():
         lines.append(f"  {severity:<9}: {count}")
     lines.append("")
     lines.append("top rules:")
-    for rule_id, count in list(result.count_by_rule().items())[:10]:
+    for rule_id, count in list(count_by_rule(backlog).items())[:10]:
         lines.append(f"  {rule_id:<12} {count}")
     return "\n".join(lines)
 

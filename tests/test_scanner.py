@@ -29,6 +29,37 @@ def test_every_inventory_entry_points_at_a_real_file():
         assert (REPO_ROOT / entry.path).exists(), entry.path
 
 
+def test_every_remediated_path_points_at_a_real_file():
+    for entry in load_inventory():
+        if entry.is_remediated:
+            assert (REPO_ROOT / entry.remediated_path).exists(), entry.remediated_path
+
+
+def test_remediated_objects_leave_the_backlog():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    remediated = {obj.object_name for obj in result.remediated()}
+    assert "ZGSK_MM_STOCK_OVERVIEW" in remediated
+    assert remediated & {obj.object_name for obj in result.objects_with_findings()}
+    assert not remediated & {obj.object_name for obj in report.build_backlog(result)}
+
+
+def test_remediation_moves_findings_from_outstanding_to_cleared():
+    import json
+
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    payload = json.loads(report.to_json(result))
+    summary = payload["summary"]
+
+    assert summary["outstanding_findings"] < summary["findings"]
+    assert summary["objects_outstanding"] + summary["objects_remediated"] == (
+        summary["objects_with_findings"]
+    )
+    assert payload["cleared_effort"]["engineer_days"] > 0
+    assert {item["object_name"] for item in payload["remediated"]} == {
+        obj.object_name for obj in result.remediated()
+    }
+
+
 def test_every_legacy_source_is_in_the_inventory():
     inventory = load_inventory()
     for path in LEGACY.rglob("*.abap"):

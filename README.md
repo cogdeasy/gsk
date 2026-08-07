@@ -58,12 +58,20 @@ Current state of the estate:
 | | |
 | --- | --- |
 | Objects scanned | 16 |
-| Findings | 204 (35 blocker, 69 critical, 67 major, 33 minor) |
-| Estimated effort | 184 engineer-days, of which 58 is GxP validation overhead |
+| Objects remediated | 1 |
+| Findings outstanding | 184 (31 blocker, 65 critical, 57 major, 31 minor) |
+| Estimated effort | 168 engineer-days, of which 53 is GxP validation overhead |
+| Cleared so far | 16 engineer-days |
 
-`abap/remediated/` holds the same stock report rebuilt against released
-CDS views with an ABAP Unit test class; it scans clean, which is what
-"done" looks like for every object in the backlog.
+An object leaves the backlog when `estate/inventory.csv` names its
+S/4HANA successor in `remediated_path`. The ECC source stays in
+`abap/src` as the before/after pair the validation package needs, so
+its findings are reported as cleared rather than disappearing.
+
+`abap/remediated/` holds those successors: rebuilt against released CDS
+views, with ABAP Unit tests over a test double for the data access
+layer. They scan clean, which is what "done" looks like for every
+object still in the backlog.
 
 ## The wave data migration pipeline
 
