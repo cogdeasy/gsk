@@ -313,6 +313,23 @@ class ScanResult:
             key=lambda group: (group.wave, group.group_id),
         )
 
+    def groups_extend_beyond_view(self) -> bool:
+        """Whether any reported group has a member the view cannot see.
+
+        What the convergence caveat is actually about. Being filtered
+        is not the same thing: a group contained within one system's
+        view is priced entirely out of what is on screen, and telling a
+        reader otherwise is a false statement about their own numbers.
+        """
+        if self.estate is None:
+            return False
+        visible = {obj.path for obj in self.objects}
+        return any(
+            obj.path not in visible
+            for group in self.convergence_groups()
+            for obj in group.objects
+        )
+
     def has_severity(self, severity: Severity) -> bool:
         """Gate on outstanding work only; remediated objects are done."""
         return any(

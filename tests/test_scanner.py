@@ -220,6 +220,37 @@ def test_a_view_filter_leaves_the_wave_it_was_taken_from_whole():
     # The groups survive the view, which is the whole point of keeping
     # the estate: a group is cross-system by definition.
     assert result.convergence_groups()
+    # And so the report's caveat about groups priced beyond the view is
+    # true here. It is asserted rather than assumed from the filter,
+    # because a group contained within one view would make it false.
+    assert result.groups_extend_beyond_view()
+
+
+def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
+    """The caveat is about groups, not about being filtered.
+
+    Printing "these groups have a member outside this view" over a
+    report where every member is on screen tells a reader their own
+    numbers are incomplete when they are not.
+    """
+    result = scan(
+        [LEGACY],
+        inventory=load_inventory(),
+        test_roots=[REPO_ROOT / "abap"],
+    )
+    assert result.convergence_groups()
+    assert not result.groups_extend_beyond_view()
+
+    # A view that keeps every member of every group: filtered, but
+    # nothing is priced out of sight.
+    in_groups = {
+        obj.path
+        for group in result.convergence_groups()
+        for obj in group.objects
+    }
+    result.filter(view=lambda obj: obj.path in in_groups)
+    assert result.is_filtered
+    assert not result.groups_extend_beyond_view()
 
 
 def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():

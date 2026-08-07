@@ -48,6 +48,24 @@ def material_key(source_system: str, material: str) -> tuple[str, str]:
     return (source_system, strip_leading_zeros(material))
 
 
+def material_lookup_key(row: dict[str, str]) -> str:
+    """The key a material row is found by, from any extract.
+
+    `material_key` in string form, for the dictionaries that join stock
+    to its master. The join has to be padding-insensitive for the same
+    reason the harmonisation table is: the two extracts are written by
+    different programs in different systems, and a batch whose MATNR is
+    padded differently from its own material master would be reported
+    as stock on a material that was never migrated - when it is sitting
+    in the load file.
+
+    Exception keys are built with `source_key` instead, so a steward
+    sees the number as their extract spells it.
+    """
+    system, material = material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+    return f"{system}/{material}"
+
+
 def partner_identity(row: dict[str, str]) -> PartnerIdentity:
     """Name, country, postal code and VAT number, case normalised."""
     return (

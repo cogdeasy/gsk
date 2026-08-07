@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from datamig import cleanse, extract, mapping, pipeline
+from datamig import cleanse, extract, identity, mapping, pipeline
 from datamig.cleanse import Action
 from datamig.identity import partner_identity, source_key
 
@@ -747,10 +747,9 @@ def test_a_collision_is_reported_even_if_one_side_is_rejected():
     # as holds, because stock hangs off either one.
     assert outcome.accepted == []
     assert len(outcome.rejected) == 2
-    assert outcome.collision_holds == {
-        "GEP/000000000000100801",
-        "GVP/000000000000100801",
-    }
+    # Holds are keyed for the stock join, so unpadded; the exception a
+    # steward reads keeps the number as their extract spells it.
+    assert outcome.collision_holds == {"GEP/100801", "GVP/100801"}
 
 
 def test_stock_stranded_by_a_number_collision_says_so():
@@ -789,6 +788,37 @@ def test_stock_stranded_by_a_number_collision_says_so():
     ]
     assert "DQ-MAT-009" in collision[0].message
     assert not stock.issues_for("DQ-STK-001")
+
+
+def test_stock_finds_its_master_however_the_extract_padded_it():
+    """Two extracts, two programs, no guarantee they pad alike.
+
+    A batch whose MATNR is spelled differently from its own material
+    master would be held under DQ-STK-001 as stock on a material that
+    was never migrated - while the material sits in the load file. The
+    same defect as the harmonisation decision, one join further on.
+    """
+    padded = _material("GVP", "000000000000700305", "ANTIGEN BULK RSV")
+    materials = cleanse.cleanse_materials([padded])
+    assert materials.accepted == [padded]
+
+    stock = cleanse.cleanse_batch_stock(
+        [
+            {
+                "SOURCE_SYSTEM": "GVP", "WERKS": "BE32",
+                "MATNR": "700305", "CHARG": "AB2600099",
+                "LGORT": "0001", "CLABS": "10.000", "CINSM": "0.000",
+                "CSPEM": "0.000", "MEINS": "ST",
+                "VFDAT": "20270101", "HSDAT": "20260101", "ZUSTD": "",
+            }
+        ],
+        materials={
+            identity.material_lookup_key(row): row for row in materials.accepted
+        },
+    )
+
+    assert not stock.issues_for("DQ-STK-001")
+    assert len(stock.accepted) == 1
 
 
 def test_stock_stranded_by_a_harmonisation_says_so(result):
@@ -1138,6 +1168,31 @@ def test_a_customer_lost_between_cleansing_and_load_breaks_the_arithmetic(
     )
 
 
+def test_a_customer_loaded_under_two_partners_breaks_the_partner_checks(result):
+    """`loaded` counts rows, not distinct source records.
+
+    Counting the set instead hides the failure that matters most here:
+    one customer written under two business partners leaves the set the
+    same size, so the arithmetic still balances and the target quietly
+    holds the customer twice. The `compared` label has to be worth
+    something.
+    """
+    customers = next(
+        count
+        for count in result.reconciliation.counts
+        if count.object_name == "customers"
+    )
+    assert customers.loaded == len(
+        [row for row in result.business_partners.xref_rows()
+         if row["SourceType"] == "KNA1"]
+    )
+
+    twice = dataclasses.replace(customers, loaded=customers.loaded + 1)
+    assert twice.duplicated == 1
+    assert not twice.balanced
+    assert twice.extracted - twice.rejected - twice.merged != twice.loaded
+
+
 def test_pipeline_writes_the_expected_artefacts(tmp_path):
     outcome = pipeline.run(wave="wave0", source_dir=WAVE0, out_dir=tmp_path)
     written = {path.name for path in outcome.written}
@@ -1159,7 +1214,9 @@ def test_stock_base_unit_comes_from_the_material_master():
         "CHARG": "B1", "CLABS": "1.000", "CINSM": "0.000", "CSPEM": "0.000",
         "MEINS": "st", "VFDAT": "", "HSDAT": "", "ZUSTD": "",
     }
-    row = mapping.map_stock(stock, {source_key(material, "MATNR"): material})
+    row = mapping.map_stock(
+        stock, {identity.material_lookup_key(material): material}
+    )
     assert row["BaseUnit"] == "KGM"
 
 

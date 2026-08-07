@@ -23,6 +23,7 @@ from enum import Enum
 from .identity import (
     PartnerIdentity,
     material_key,
+    material_lookup_key,
     partner_identity,
     source_key,
     strip_leading_zeros,
@@ -295,7 +296,7 @@ def _reject_unit_mismatches(
     for row in mismatched:
         target = harmonisation_targets[_row_key(row)]
         result.rejected.append(row)
-        result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+        result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
             target_product=target,
             rule="DQ-MAT-012",
             reason="which is held in a different base unit",
@@ -344,7 +345,7 @@ def _reject_undecided_collisions(
             else f"more than once within {next(iter(systems))}"
         )
         keys = ", ".join(source_key(row, "MATNR") for row in undecided)
-        held.update(source_key(row, "MATNR") for row in undecided)
+        held.update(material_lookup_key(row) for row in undecided)
         # Only what is still in the load can be held back; a row another
         # rule already rejected is named in the message and left where
         # it is, so it is not counted as rejected twice.
@@ -418,7 +419,7 @@ def _reject_orphaned_merges(
         target = harmonisation_targets[_row_key(row)]
         result.rejected.append(row)
         if target in retired:
-            result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
                 target_product=target,
                 rule="DQ-MAT-011",
                 reason="which another decision itself retires",
@@ -432,7 +433,7 @@ def _reject_orphaned_merges(
                        "became, so name the surviving product directly")
             )
             continue
-        result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+        result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
             target_product=target,
             rule="DQ-MAT-010",
             reason="which cleansing itself held back",
@@ -614,7 +615,13 @@ def cleanse_batch_stock(
     for row in rows:
         key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
         reject = False
-        stock_material = source_key(row, "MATNR")
+        # Padding-insensitive, like every other material join: the
+        # stock extract and the material master are written by
+        # different programs, and a batch padded differently from its
+        # own master would be held under DQ-STK-001 as stock on a
+        # material that was never migrated - the misdiagnosis
+        # DQ-STK-006 and DQ-STK-007 exist to prevent.
+        stock_material = material_lookup_key(row)
         material = materials.get(stock_material)
 
         if material is None and stock_material in holds:

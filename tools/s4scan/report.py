@@ -171,9 +171,8 @@ def to_json(result: ScanResult) -> str:
         "cleared_effort": EffortEstimate.from_objects(result.remediated()).__dict__,
         "merge": {
             "source_systems": {
-                system: SOURCE_SYSTEMS.get(system, system)
-                for system in sorted(result.by_source_system())
-                if system != "unassigned"
+                system: SOURCE_SYSTEMS[system]
+                for system in sorted(by_source_system(result))
             },
             "convergence_groups": [estimate.__dict__ for estimate in convergence],
             "convergence_avoided_days": round(
@@ -323,7 +322,7 @@ def to_markdown(result: ScanResult) -> str:
         _convergence_section(
             convergence,
             groups_with_built_counterpart(result),
-            filtered=result.is_filtered,
+            filtered=result.groups_extend_beyond_view(),
         )
     )
     lines.extend(_decommission_section(decommissioned))

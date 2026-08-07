@@ -14,7 +14,12 @@ from pathlib import Path
 
 from . import cleanse, extract, load, mapping, reconcile
 from .cleanse import Action, CleanseResult
-from .identity import material_key, partner_identity, source_key
+from .identity import (
+    material_key,
+    material_lookup_key,
+    partner_identity,
+    source_key,
+)
 from .reconcile import ObjectCounts, Reconciliation
 
 
@@ -81,7 +86,7 @@ def run(
     )
 
     accepted_materials = {
-        source_key(row, "MATNR"): row for row in materials.accepted
+        material_lookup_key(row): row for row in materials.accepted
     }
     batch_stock = cleanse.cleanse_batch_stock(
         datasets["batch_stock"].rows,
@@ -109,7 +114,7 @@ def run(
         mapping.map_open_item(row, partners.xref) for row in open_items.accepted
     ]
     result.stock = [
-        mapping.map_stock(row, accepted_materials, products.xref)
+        mapping.map_stock(row, accepted_materials, products.lookup)
         for row in batch_stock.accepted
     ]
 
@@ -130,6 +135,17 @@ def run(
             f"{row['SourceSystem']}/{row['SourceId']}"
             for row in xref_rows
             if row["SourceType"] == source_type
+        )
+        for source_type in ("KNA1", "LFA1")
+    }
+    # Rows, not distinct keys. A set cannot count a source record
+    # written under two business partners: `loaded` would still equal
+    # the accepted count and both partner checks would pass while the
+    # target held one customer twice. `ObjectCounts.duplicated` is the
+    # difference between the two, which is why it needs both.
+    loaded_rows = {
+        source_type: sum(
+            1 for row in xref_rows if row["SourceType"] == source_type
         )
         for source_type in ("KNA1", "LFA1")
     }
@@ -162,7 +178,7 @@ def run(
         # source side and pass however many records mapping lost.
         ObjectCounts(
             "customers", customers.source_count, len(customers.rejected),
-            len(loaded_sources["KNA1"]), _warnings(customers),
+            loaded_rows["KNA1"], _warnings(customers),
             source_keys=frozenset(
                 source_key(row, "KUNNR") for row in customers.accepted
             ),
@@ -171,7 +187,7 @@ def run(
         ),
         ObjectCounts(
             "vendors", vendors.source_count, len(vendors.rejected),
-            len(loaded_sources["LFA1"]), _warnings(vendors),
+            loaded_rows["LFA1"], _warnings(vendors),
             source_keys=frozenset(
                 source_key(row, "LIFNR") for row in vendors.accepted
             ),
@@ -195,8 +211,8 @@ def run(
             len(result.stock), _warnings(batch_stock),
             # Derived from the governed decision table for the same
             # reason as the materials check above: map_stock resolves
-            # the product through products.xref, so reading the ECC
-            # side out of that same cross reference would move both
+            # the product through the product cross reference, so
+            # reading the ECC side out of that same reference would move both
             # sides together and a batch put onto the wrong survivor
             # would reconcile clean.
             source_keys=frozenset(

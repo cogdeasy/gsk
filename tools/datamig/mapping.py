@@ -23,6 +23,7 @@ from .extract import HarmonisationDecision
 from .identity import (
     PartnerIdentity,
     material_key,
+    material_lookup_key,
     partner_identity,
     source_key,
     strip_leading_zeros,
@@ -112,6 +113,23 @@ class ProductResult:
     @property
     def merged_count(self) -> int:
         return len(self.merged_materials)
+
+    @property
+    def lookup(self) -> dict[str, str]:
+        """`xref` re-keyed for joining, rather than for reading.
+
+        The cross reference is written to the load file, where
+        `SourceMaterial` is the historical ECC number and has to stay
+        spelled the way ECC spells it. A join must not care: stock and
+        the material master come out of different programs, and the
+        two spellings of one number are the same material.
+        """
+        return {
+            f"{system}/{strip_leading_zeros(material)}": product
+            for system, material, product in (
+                (*key.split("/"), product) for key, product in self.xref.items()
+            )
+        }
 
     def xref_rows(self) -> list[dict[str, str]]:
         rows = [
@@ -342,7 +360,7 @@ def map_stock(
     materials: dict[str, dict[str, str]],
     product_xref: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    material = materials.get(source_key(row, "MATNR"), {})
+    material = materials.get(material_lookup_key(row), {})
     # The unit of record is the one on the cleansed material master; the
     # stock extract's own MEINS is not validated against the ISO mapping.
     source_unit = material.get("MEINS") or row["MEINS"]
@@ -350,7 +368,7 @@ def map_stock(
     # Stock follows the harmonised product, so batches of a material
     # that was merged land on the surviving product number.
     product = (product_xref or {}).get(
-        source_key(row, "MATNR"), strip_leading_zeros(row["MATNR"])
+        material_lookup_key(row), strip_leading_zeros(row["MATNR"])
     )
     return {
         "SourceSystem": row["SOURCE_SYSTEM"],
