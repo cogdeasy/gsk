@@ -143,6 +143,11 @@ def _merge_checks(
             description=(
                 "partner records minus merges equals business partners"
             ),
+            # ``accepted_partners`` is counted on the ECC side, after
+            # cleansing. ``merged_partners`` and ``business_partners``
+            # are both read off the files that will be loaded, so a
+            # record lost, duplicated or invented between the two
+            # breaks the equality.
             source_value=f"{accepted_partners} records - {merged_partners} merged",
             target_value=f"{business_partners} BPs",
             passed=accepted_partners - merged_partners == business_partners,

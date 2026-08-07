@@ -1,4 +1,5 @@
 import shutil
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -211,6 +212,51 @@ def test_a_harmonisation_decision_for_an_absent_material_fails_the_wave(tmp_path
     assert not check.passed
     assert "GVP/000000000000799999" in check.note
     assert not outcome.reconciliation.passed
+
+
+def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
+    """REC-MRG-001 has to notice a record that never reached the load."""
+    from datamig import reconcile
+
+    # Drop one source record from a BP that several records share, so
+    # the BP itself survives - exactly the loss that is hard to see.
+    rows = result.business_partners.xref_rows()
+    shared = Counter(row["BusinessPartner"] for row in rows)
+    lost = next(row for row in rows if shared[row["BusinessPartner"]] > 1)
+    xref_rows = [row for row in rows if row is not lost]
+    merged = len(xref_rows) - len({row["BusinessPartner"] for row in xref_rows})
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=result.reconciliation.counts,
+        accepted_open_items=result.cleansing["open_items"].accepted,
+        loaded_open_items=result.open_items,
+        accepted_stock=result.cleansing["batch_stock"].accepted,
+        loaded_stock=result.stock,
+        accepted_partners=len(result.cleansing["customers"].accepted)
+        + len(result.cleansing["vendors"].accepted),
+        partner_identities=len(result.business_partners.partners),
+        business_partners=len(result.business_partners.partners),
+        merged_partners=merged,
+        xref=result.business_partners.xref,
+    )
+    check = next(c for c in broken.checks if c.id == "REC-MRG-001")
+    assert not check.passed
+
+
+def test_stock_stranded_by_a_harmonisation_says_so(result):
+    """Not 'no such material' - the material was deliberately retired."""
+    stock = result.cleansing["batch_stock"]
+    cascade = stock.issues_for("DQ-STK-006")
+    assert [issue.key for issue in cascade] == [
+        "GVP/BE32/000000000000700301/AB2600041",
+        "GVP/BE32/000000000000700301/AB2600042",
+    ]
+    assert "100251" in cascade[0].message
+    assert "DQ-MAT-010" in cascade[0].message
+
+    stranded = {issue.key for issue in stock.issues_for("DQ-STK-001")}
+    assert not any("700301" in key for key in stranded)
 
 
 def test_a_material_number_used_in_both_systems_is_flagged():

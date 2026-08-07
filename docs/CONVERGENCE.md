@@ -138,7 +138,10 @@ consequence: if the surviving product is rejected by cleansing, the
 record that was to be retired has nowhere to land, and loading it under
 its own number instead would quietly reverse a governed decision and
 split the product's stock across two numbers. It is held back until the
-surviving master is corrected.
+surviving master is corrected, and the batches sitting on that material
+are held with it under `DQ-STK-006`, which names the harmonisation
+rather than reporting a missing master the steward would go looking
+for.
 
 **The merge is reconciled, not assumed.** With two sources loading into
 one client, fewer target records than source records is the intended

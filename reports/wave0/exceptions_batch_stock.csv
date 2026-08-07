@@ -12,8 +12,8 @@ DQ-STK-005,reject,batch_stock,GEP/IE41/000000000000100246/B2500401,MEINS,"stock 
 DQ-STK-002,reject,batch_stock,GEP/GB23/000000000000100247/C2500501,CHARG,batch stock for a material that is not batch managed
 DQ-STK-002,reject,batch_stock,GEP/GB21/000000000000100240/P2500601,CHARG,batch stock for a material that is not batch managed
 DQ-STK-001,reject,batch_stock,GEP/GB21/000000000000100999/B2500777,MATNR,stock for a material that is not in the migrated master
-DQ-STK-001,reject,batch_stock,GVP/BE32/000000000000700301/AB2600041,MATNR,stock for a material that is not in the migrated master
-DQ-STK-001,reject,batch_stock,GVP/BE32/000000000000700301/AB2600042,MATNR,stock for a material that is not in the migrated master
+DQ-STK-006,reject,batch_stock,GVP/BE32/000000000000700301/AB2600041,MATNR,"material was harmonised into product 100251, which cleansing held back (DQ-MAT-010); this stock loads once that product does"
+DQ-STK-006,reject,batch_stock,GVP/BE32/000000000000700301/AB2600042,MATNR,"material was harmonised into product 100251, which cleansing held back (DQ-MAT-010); this stock loads once that product does"
 DQ-STK-004,warn,batch_stock,GVP/BE32/000000000000700301/AB2600042,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
 DQ-STK-004,warn,batch_stock,GVP/BE32/000000000000700302/SH2600119,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
 DQ-STK-004,warn,batch_stock,GVP/BE33/000000000000700307/AS2600014,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"

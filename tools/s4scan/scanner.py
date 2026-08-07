@@ -341,7 +341,10 @@ def _apply_object_rules(
         if rule.id == "SI-CONV-001":
             if result.entry is None or not result.entry.converges:
                 continue
-            if result.is_remediated:
+            # `converges` and `is_decommissioned` are mutually
+            # exclusive dispositions today, but relying on that leaves
+            # the invariant somewhere else in the file.
+            if result.is_remediated or result.is_decommissioned:
                 continue
             # Only a group with a member in the other system is a
             # duplication. Without this the finding would contradict

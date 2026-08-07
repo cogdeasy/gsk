@@ -490,20 +490,25 @@ def _convergence_section(
         "excluded - the saving was banked when it was built."
     )
     lines.append("")
-    lines.append(
-        "| Group | Wave | Systems | Independent days | Converged days | Avoided |"
-    )
-    lines.append("| --- | --- | --- | --- | --- | --- |")
-    for estimate in convergence:
-        systems = ", ".join(estimate.source_systems)
+
+    # An empty priced table with a zero total reads as "no saving
+    # available", which is a different statement from "every group is
+    # already settled".
+    if convergence:
         lines.append(
-            f"| {estimate.group_id} | {estimate.wave} | {systems} | "
-            f"{estimate.independent_days} | {estimate.converged_days} | "
-            f"{estimate.avoided_days} |"
+            "| Group | Wave | Systems | Independent days | Converged days | Avoided |"
         )
-    total_avoided = round(sum(e.avoided_days for e in convergence), 1)
-    lines.append(f"| **Total** | | | | | **{total_avoided}** |")
-    lines.append("")
+        lines.append("| --- | --- | --- | --- | --- | --- |")
+        for estimate in convergence:
+            systems = ", ".join(estimate.source_systems)
+            lines.append(
+                f"| {estimate.group_id} | {estimate.wave} | {systems} | "
+                f"{estimate.independent_days} | {estimate.converged_days} | "
+                f"{estimate.avoided_days} |"
+            )
+        total_avoided = round(sum(e.avoided_days for e in convergence), 1)
+        lines.append(f"| **Total** | | | | | **{total_avoided}** |")
+        lines.append("")
 
     if already_built:
         lines.append(

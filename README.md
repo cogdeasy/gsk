@@ -101,7 +101,7 @@ Current state of the estate:
 | Findings outstanding | 279 (46 blocker, 106 critical, 84 major, 43 minor) |
 | Estimated effort | 274 engineer-days, of which 93 is GxP validation overhead |
 | Cleared so far | 32 engineer-days |
-| Avoided by converging duplicates | 70 engineer-days across 6 groups |
+| Avoided by converging duplicates | 46.5 engineer-days across 4 of the 6 groups |
 | Avoided by decommissioning cross-system interfaces | 20 engineer-days |
 
 An object leaves the backlog when `estate/inventory.csv` names its
@@ -145,12 +145,12 @@ The merge is where two sources become one client:
 ```
 object         extracted  rejected  merged  loaded   warn
 materials             30         4       3      23      6
-customers             25         3       0      22      9
+customers             25         2       0      23      9
 vendors               21         1       0      20     11
 open_items            42         6       0      36      1
 batch_stock           31         9       0      22     10
 
-business partners created: 32 (merged 10 source records, 7 held in both systems)
+business partners created: 33 (merged 10 source records, 7 held in both systems)
 products created: 23 (harmonised 3 duplicate materials away)
 ```
 

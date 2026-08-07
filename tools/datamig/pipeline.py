@@ -84,7 +84,9 @@ def run(
         source_key(row, "MATNR"): row for row in materials.accepted
     }
     batch_stock = cleanse.cleanse_batch_stock(
-        datasets["batch_stock"].rows, accepted_materials
+        datasets["batch_stock"].rows,
+        accepted_materials,
+        materials.harmonisation_holds,
     )
 
     result.cleansing = {
@@ -115,6 +117,13 @@ def run(
     # that drops, duplicates or invents a record breaks the check.
     bp_rows = [partner.as_row() for partner in partners.partners]
     xref_rows = partners.xref_rows()
+    # Counted off the cross reference that will be written rather than
+    # off the mapping's own tally. Taking it from BusinessPartnerResult
+    # makes REC-MRG-001 compare a number with itself: a record lost
+    # between cleansing and load would move both sides together.
+    merged_partners = len(xref_rows) - len(
+        {row["BusinessPartner"] for row in xref_rows}
+    )
     loaded_sources = {
         source_type: frozenset(
             f"{row['SourceSystem']}/{row['SourceId']}"
@@ -203,7 +212,7 @@ def run(
             {partner_identity(row) for row in accepted_partner_rows}
         ),
         business_partners=len({row["BusinessPartner"] for row in bp_rows}),
-        merged_partners=partners.merged_count,
+        merged_partners=merged_partners,
         xref=partners.xref,
         cross_system_partners=len(partners.cross_system_partners),
         source_systems=sorted(extract.SOURCE_SYSTEMS),

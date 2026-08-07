@@ -80,6 +80,10 @@ class CleanseResult:
     accepted: list[dict[str, str]] = field(default_factory=list)
     rejected: list[dict[str, str]] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
+    #: Source key -> the product it was harmonised into, for records
+    #: held back by `DQ-MAT-010`. Downstream objects need the reason,
+    #: not just the absence, to report their own rejects usefully.
+    harmonisation_holds: dict[str, str] = field(default_factory=dict)
 
     @property
     def source_count(self) -> int:
@@ -226,17 +230,23 @@ def _reject_orphaned_merges(
         if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
     }
 
-    orphaned = [
-        row for row in result.accepted
-        if (row["SOURCE_SYSTEM"], row["MATNR"]) in harmonisation_targets
-        and harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
-        not in surviving
-    ]
+    def is_orphaned(row: dict[str, str]) -> bool:
+        key = (row["SOURCE_SYSTEM"], row["MATNR"])
+        return (
+            key in harmonisation_targets
+            and harmonisation_targets[key] not in surviving
+        )
+
+    orphaned = [row for row in result.accepted if is_orphaned(row)]
+    # Rebuilt rather than removed one by one: list.remove matches on
+    # dict equality, so it would drop whichever row happens to compare
+    # equal first.
+    result.accepted[:] = [row for row in result.accepted if not is_orphaned(row)]
 
     for row in orphaned:
         target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
-        result.accepted.remove(row)
         result.rejected.append(row)
+        result.harmonisation_holds[source_key(row, "MATNR")] = target
         result.issues.append(
             _issue("DQ-MAT-010", Action.REJECT, "materials",
                    source_key(row, "MATNR"), "MATNR",
@@ -393,16 +403,31 @@ def cleanse_open_items(
 
 
 def cleanse_batch_stock(
-    rows: list[dict[str, str]], materials: dict[str, dict[str, str]]
+    rows: list[dict[str, str]],
+    materials: dict[str, dict[str, str]],
+    harmonisation_holds: dict[str, str] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="batch_stock")
+    holds = harmonisation_holds or {}
 
     for row in rows:
         key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
         reject = False
-        material = materials.get(source_key(row, "MATNR"))
+        material_key = source_key(row, "MATNR")
+        material = materials.get(material_key)
 
-        if material is None:
+        if material is None and material_key in holds:
+            # Naming the missing master would send a steward looking
+            # for a record that was deliberately retired. The work is
+            # on the surviving product, or on the decision itself.
+            reject = True
+            result.issues.append(
+                _issue("DQ-STK-006", Action.REJECT, "batch_stock", key, "MATNR",
+                       f"material was harmonised into product "
+                       f"{holds[material_key]}, which cleansing held back "
+                       "(DQ-MAT-010); this stock loads once that product does")
+            )
+        elif material is None:
             reject = True
             result.issues.append(
                 _issue("DQ-STK-001", Action.REJECT, "batch_stock", key, "MATNR",

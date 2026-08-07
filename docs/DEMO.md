@@ -136,7 +136,7 @@ review record the validation package needs.
 make migrate
 ```
 
-Wave 0, both ECC systems in one run: 149 records extracted, 23 held
+Wave 0, both ECC systems in one run: 149 records extracted, 22 held
 back. Every reject is named:
 
 - a batch-managed vaccine with no shelf life (GMP data rule);
@@ -169,8 +169,8 @@ GSK Ireland Manufacturing is customer 210059 and supplier 510017 - one
 business partner with all four roles. Lonza AG is a supplier three
 times over across the two systems - one BP, three company code
 segments. UNICEF Supply Division is a customer in each system under a
-different number - one BP, both numbers in the cross-reference. 42
-accepted source records, 32 business partners.
+different number - one BP, both numbers in the cross-reference. 43
+accepted source records, 33 business partners.
 
 Products merge the same way, but only where the business has said so:
 
