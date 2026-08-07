@@ -212,6 +212,9 @@ class ScanResult:
     # definition, so grouping over the narrowed list would dissolve
     # every group.
     estate: list[ObjectResult] | None = None
+    # What the estate contains, as opposed to what was scanned. Only
+    # the inventory knows that, and SI-CONV-001 is raised from it.
+    inventory: Inventory | None = None
 
     @property
     def is_filtered(self) -> bool:
@@ -328,6 +331,43 @@ class ScanResult:
             obj.path not in visible
             for group in self.convergence_groups()
             for obj in group.objects
+        )
+
+    def groups_beyond_scan(self) -> list[str]:
+        """Groups a finding names that this scan holds only part of.
+
+        SI-CONV-001 is raised from the inventory, which knows the whole
+        estate, while a group is priced from what was scanned. Scanning
+        one system's directory therefore flags its objects as
+        duplicated while no convergence table mentions the group. The
+        finding is true and the pricing would not be, so the groups are
+        named instead of either being dropped.
+        """
+        if self.inventory is None:
+            return []
+        scanned = {
+            obj.object_name
+            for obj in (self.estate if self.estate is not None else self.objects)
+        }
+        priced = {group.group_id for group in self.convergence_groups()}
+        # Read off the findings rather than off the objects: the
+        # contradiction is a finding naming a group no table explains,
+        # and a group whose members are all decommissioned raises no
+        # finding - it is costed in the decommission section instead.
+        partial = {
+            finding.evidence
+            for obj in self.objects
+            for finding in obj.findings
+            if finding.rule.id == "SI-CONV-001" and finding.evidence not in priced
+        }
+        return sorted(
+            group
+            for group in partial
+            if self.inventory.is_cross_system_group(group)
+            and any(
+                entry.object_name not in scanned
+                for entry in self.inventory.convergence_group(group)
+            )
         )
 
     def has_severity(self, severity: Severity) -> bool:
@@ -479,7 +519,7 @@ def scan(
     test_roots: list[str | Path] | None = None,
 ) -> ScanResult:
     resolved_test_roots = [Path(root) for root in (test_roots or roots)]
-    result = ScanResult()
+    result = ScanResult(inventory=inventory)
     for root in roots:
         for path in discover(root):
             result.objects.append(

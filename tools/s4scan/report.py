@@ -178,6 +178,9 @@ def to_json(result: ScanResult) -> str:
             "convergence_avoided_days": round(
                 sum(estimate.avoided_days for estimate in convergence), 1
             ),
+            # Groups this scan flags but cannot cost, because it holds
+            # only one side of them. Empty for a scan of the estate.
+            "unpriced_convergence_groups": result.groups_beyond_scan(),
             "decommission_avoided_days": round(
                 EffortEstimate.from_objects(decommissioned).engineer_days, 1
             ),
@@ -323,6 +326,7 @@ def to_markdown(result: ScanResult) -> str:
             convergence,
             groups_with_built_counterpart(result),
             filtered=result.groups_extend_beyond_view(),
+            unpriced=result.groups_beyond_scan(),
         )
     )
     lines.extend(_decommission_section(decommissioned))
@@ -489,8 +493,9 @@ def _convergence_section(
     convergence: list[ConvergenceEstimate],
     already_built: list[ConvergenceGroup] | None = None,
     filtered: bool = False,
+    unpriced: list[str] | None = None,
 ) -> list[str]:
-    if not convergence and not already_built:
+    if not convergence and not already_built and not unpriced:
         return []
 
     lines = ["## Convergence backlog", ""]
@@ -537,6 +542,20 @@ def _convergence_section(
             )
         total_avoided = round(sum(e.avoided_days for e in convergence), 1)
         lines.append(f"| **Total** | | | | | **{total_avoided}** |")
+        lines.append("")
+
+    # A scan of part of the estate still raises SI-CONV-001, because
+    # the duplication is a fact about the inventory rather than about
+    # what was scanned. Pricing the merge off the one member in view
+    # would be a different claim, and a wrong one.
+    if unpriced:
+        lines.append(
+            f"{', '.join(f'`{group}`' for group in unpriced)} "
+            f"{'is' if len(unpriced) == 1 else 'are'} flagged as "
+            "duplicated but not priced here: the other implementation is "
+            "outside the scanned path. Scan the whole estate to cost the "
+            "merge."
+        )
         lines.append("")
 
     if already_built:

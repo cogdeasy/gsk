@@ -824,6 +824,103 @@ def test_stock_stranded_by_a_number_collision_says_so():
     assert not stock.issues_for("DQ-STK-001")
 
 
+def _keep_separate(system: str, material: str) -> extract.HarmonisationDecision:
+    return extract.HarmonisationDecision(
+        source_system=system,
+        material=material,
+        target_product="",
+        decision="keep_separate",
+        note="ruled distinct products by the data council",
+    )
+
+
+def test_a_ruling_that_two_products_stay_separate_is_not_an_open_question():
+    """The council answered; the exception pack must not re-ask.
+
+    Nothing merges, so mapping never sees the ruling - but cleansing
+    warns on a duplicate description precisely to prompt the decision
+    that has already been taken.
+    """
+    harmonisation = mapping.ProductHarmonisation(
+        [_keep_separate("GVP", "000000000000700311")]
+    )
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100260", "ADJUVANT AS01B BULK"),
+            _material("GVP", "000000000000700311", "ADJUVANT AS01B BULK"),
+        ],
+        harmonisation.targets,
+        harmonisation.ruled_separate,
+    )
+
+    assert not outcome.issues_for("DQ-MAT-008")
+    assert len(outcome.accepted) == 2
+
+
+def test_a_collision_the_council_ruled_separate_says_so():
+    """Two products, one number: the ruling does not settle that.
+
+    Only one record can hold the bare number in the target, so both are
+    still held - but a message denying the decision exists sends a
+    steward to take it again.
+    """
+    harmonisation = mapping.ProductHarmonisation(
+        [_keep_separate("GVP", "000000000000100261")]
+    )
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100261", "SALBUTAMOL SULPHATE"),
+            _material("GVP", "000000000000100261", "ALUMINIUM HYDROXIDE"),
+        ],
+        harmonisation.targets,
+        harmonisation.ruled_separate,
+    )
+
+    collision = outcome.issues_for("DQ-MAT-009")
+    assert len(collision) == 1
+    assert not outcome.accepted
+    assert "rules them separate" in collision[0].message
+    assert "no harmonisation decision" not in collision[0].message
+
+
+def test_a_decision_table_missing_a_column_is_an_operator_error(tmp_path):
+    """The CLI turns ExtractError into exit code 2 and a message.
+
+    Anything else reaches whoever maintains the governed table as a
+    traceback about a dictionary key.
+    """
+    table = tmp_path / "material_harmonisation.csv"
+    table.write_text("SOURCE_SYSTEM,MATNR,DECISION\nGVP,700301,merge\n")
+
+    with pytest.raises(extract.ExtractError) as error:
+        extract.read_harmonisation(table)
+    assert "TARGET_PRODUCT" in str(error.value)
+
+
+def test_a_decision_naming_no_material_is_an_operator_error(tmp_path):
+    table = tmp_path / "material_harmonisation.csv"
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION\nGVP,,100251,merge\n"
+    )
+
+    with pytest.raises(extract.ExtractError) as error:
+        extract.read_harmonisation(table)
+    assert "row 2" in str(error.value)
+    assert "MATNR" in str(error.value)
+
+
+def test_a_merge_naming_no_surviving_product_is_refused(tmp_path):
+    """An empty target strips to product '0', which exists nowhere."""
+    table = tmp_path / "material_harmonisation.csv"
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION\nGVP,700301,,merge\n"
+    )
+
+    with pytest.raises(extract.ExtractError) as error:
+        extract.read_harmonisation(table)
+    assert "surviving product" in str(error.value)
+
+
 def test_a_record_held_by_two_rules_is_rejected_once():
     """The evidence pack has to count each physical record once.
 

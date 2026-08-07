@@ -63,9 +63,13 @@ class ProductHarmonisation:
     """
 
     def __init__(self, decisions: list[HarmonisationDecision]) -> None:
-        self._merges = {
+        self._decisions = {
             material_key(decision.source_system, decision.material): decision
             for decision in decisions
+        }
+        self._merges = {
+            key: decision
+            for key, decision in self._decisions.items()
             if decision.decision == "merge"
         }
         # Both sides of the decision are unpadded, not just the material
@@ -95,6 +99,21 @@ class ProductHarmonisation:
     @property
     def targets(self) -> dict[tuple[str, str], str]:
         return dict(self._targets)
+
+    @property
+    def ruled_separate(self) -> set[tuple[str, str]]:
+        """Materials the council has ruled are genuinely two products.
+
+        Nothing merges, so mapping has no use for this - but cleansing
+        does. A ruling that these are different products is still a
+        ruling, and a rule that asks a steward to make a decision they
+        have already made is an exception nobody can close.
+        """
+        return {
+            key
+            for key, decision in self._decisions.items()
+            if decision.decision == "keep_separate"
+        }
 
     def decision_for(self, key: tuple[str, str]) -> HarmonisationDecision | None:
         return self._merges.get(key)

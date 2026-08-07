@@ -141,6 +141,7 @@ def _issue(rule_id, action, object_name, key, field_name, message) -> Issue:
 def cleanse_materials(
     rows: list[dict[str, str]],
     harmonisation_targets: dict[tuple[str, str], str] | None = None,
+    ruled_separate: set[tuple[str, str]] | None = None,
 ) -> CleanseResult:
     """Cleanse the material master from both systems.
 
@@ -158,6 +159,15 @@ def cleanse_materials(
         material_key(system, material): target
         for (system, material), target in (harmonisation_targets or {}).items()
     }
+    # A ruling that two materials stay separate is a decision like any
+    # other, even though mapping has nothing to do with it: the record
+    # still cannot load under a number the other record also claims,
+    # but the exception has to say that a decision exists.
+    ruled_separate = {
+        material_key(system, material)
+        for system, material in (ruled_separate or set())
+    }
+    decided = set(harmonisation_targets) | ruled_separate
     result = CleanseResult(object_name="materials")
     descriptions: dict[str, list[dict[str, str]]] = defaultdict(list)
     numbers: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -240,10 +250,7 @@ def cleanse_materials(
         # and the decision is the confirmation. Counted the same way as
         # DQ-MAT-009: one record left undecided means the rest are
         # being merged into it, and there is nothing outstanding.
-        undecided = [
-            row for row in duplicates
-            if _row_key(row) not in harmonisation_targets
-        ]
+        undecided = [row for row in duplicates if _row_key(row) not in decided]
         if len(undecided) > 1:
             systems = {row["SOURCE_SYSTEM"] for row in undecided}
             scope = (
@@ -258,7 +265,9 @@ def cleanse_materials(
                        f"{scope}, confirm the harmonisation decision")
             )
 
-    _reject_undecided_collisions(result, numbers, harmonisation_targets or {})
+    _reject_undecided_collisions(
+        result, numbers, harmonisation_targets or {}, ruled_separate
+    )
 
     if harmonisation_targets:
         _reject_unit_mismatches(result, harmonisation_targets)
@@ -314,6 +323,7 @@ def _reject_undecided_collisions(
     result: CleanseResult,
     numbers: dict[str, list[dict[str, str]]],
     harmonisation_targets: dict[tuple[str, str], str],
+    ruled_separate: set[tuple[str, str]] | None = None,
 ) -> None:
     """Hold back a material number that means two things.
 
@@ -350,16 +360,30 @@ def _reject_undecided_collisions(
         )
         keys = ", ".join(source_key(row, "MATNR") for row in undecided)
         held.update(material_lookup_key(row) for row in undecided)
+        # A ruling that these are two products does not resolve this:
+        # the target product number is the bare MATNR and only one
+        # record can have it. But saying no decision exists when one
+        # does sends a steward to make it a second time.
+        if any(_row_key(row) in (ruled_separate or set()) for row in undecided):
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products, and the decision table rules them separate "
+                "without naming the number the other one takes; neither "
+                "can load under it until one does"
+            )
+        else:
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products and no harmonisation decision nominates a "
+                "survivor; the target product number cannot be carried "
+                "over from either"
+            )
         # Only what is still in the load can be held back; a row another
         # rule already rejected is named in the message and left where
         # it is, so it is not counted as rejected twice.
         colliding.extend(row for row in undecided if id(row) in accepted)
         result.issues.append(
-            _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR",
-                   f"material number {number} is used {scope} for different "
-                   "products and no harmonisation decision nominates a "
-                   "survivor; the target product number cannot be carried "
-                   "over from either")
+            _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR", message)
         )
 
     # Every side of every collision, including one already rejected by

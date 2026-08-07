@@ -184,6 +184,21 @@ def _summary(result) -> str:
                 "the programme's, not this view's"
             )
 
+    # SI-CONV-001 fires from the inventory, so a scan of part of the
+    # estate flags a duplication it cannot cost. Saying nothing leaves
+    # findings naming groups that appear in no table.
+    unpriced = result.groups_beyond_scan()
+    if unpriced:
+        lines.append("")
+        lines.append(
+            f"groups not priced     : {len(unpriced)} "
+            f"({', '.join(unpriced)})"
+        )
+        lines.append(
+            "                        the other implementation is outside "
+            "the scanned path"
+        )
+
     lines.append("")
     lines.append("top rules:")
     for rule_id, count in list(count_by_rule(backlog).items())[:10]:

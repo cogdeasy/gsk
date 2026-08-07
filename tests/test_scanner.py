@@ -78,6 +78,49 @@ def test_the_two_duplication_predicates_agree():
         assert inventory.is_cross_system_group(group_id) == (group_id in groups)
 
 
+def test_a_scan_of_one_system_directory_explains_the_groups_it_flags():
+    """Half an estate still raises SI-CONV-001, from the inventory.
+
+    The group cannot be priced off the one member in view, so the
+    alternative to naming it is a finding that points at a group no
+    table in the report mentions.
+    """
+    inventory = load_inventory()
+    result = scan(
+        [LEGACY / "gvp"], inventory=inventory, test_roots=[REPO_ROOT / "abap"]
+    )
+
+    flagged = {
+        finding.evidence
+        for obj in result.objects
+        for finding in obj.findings
+        if finding.rule.id == "SI-CONV-001"
+    }
+    assert flagged
+    assert not result.convergence_groups()
+    assert set(result.groups_beyond_scan()) == flagged
+
+    markdown = report.to_markdown(result)
+    for group_id in flagged:
+        assert group_id in markdown
+
+
+def test_a_scan_of_the_whole_estate_leaves_no_group_unexplained():
+    inventory = load_inventory()
+    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    assert not result.groups_beyond_scan()
+
+
+def test_a_system_view_prices_its_groups_rather_than_deferring_them():
+    """`--system` scans the estate and narrows the view afterwards."""
+    inventory = load_inventory()
+    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result.filter(view=lambda obj: obj.source_system == "GVP")
+
+    assert result.convergence_groups()
+    assert not result.groups_beyond_scan()
+
+
 def test_a_pair_that_both_sides_switch_off_is_still_a_duplication():
     """It is why the interface disappears - that saving is the point."""
     assert is_a_duplication([("GEP", True), ("GVP", True)])

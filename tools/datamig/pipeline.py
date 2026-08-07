@@ -72,7 +72,9 @@ def run(
     )
 
     materials = cleanse.cleanse_materials(
-        datasets["materials"].rows, harmonisation.targets
+        datasets["materials"].rows,
+        harmonisation.targets,
+        harmonisation.ruled_separate,
     )
     customers = cleanse.cleanse_partners(
         datasets["customers"].rows, "customers", "KUNNR"

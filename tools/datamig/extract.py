@@ -40,6 +40,10 @@ HARMONISATION_FILE = "material_harmonisation.csv"
 #: stop the run rather than quietly leave both products loaded.
 HARMONISATION_DECISIONS = frozenset({"merge", "keep_separate"})
 
+#: What every row of the table must carry. A governed input arriving
+#: malformed is an operator's mistake to correct, not a traceback.
+HARMONISATION_COLUMNS = ("SOURCE_SYSTEM", "MATNR", "TARGET_PRODUCT", "DECISION")
+
 SYSTEM_FIELD = "SOURCE_SYSTEM"
 
 
@@ -107,13 +111,47 @@ def read_harmonisation(path: str | Path) -> list[HarmonisationDecision]:
 
     decisions: list[HarmonisationDecision] = []
     with open(file_path, newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
+        reader = csv.DictReader(handle)
+        # The CLI turns ExtractError into a message and exit code 2, so
+        # anything that reaches an operator as a traceback is a mistake
+        # in a governed table that the pipeline failed to explain.
+        missing = [
+            column
+            for column in HARMONISATION_COLUMNS
+            if column not in (reader.fieldnames or [])
+        ]
+        if missing:
+            raise ExtractError(
+                f"{file_path}: decision table has no {', '.join(missing)} "
+                f"column; it needs {', '.join(HARMONISATION_COLUMNS)}"
+            )
+        # From 2: a spreadsheet counts the header as row 1, and the
+        # steward correcting this is reading it in one.
+        for line, row in enumerate(reader, start=2):
+            values = {
+                column: (row.get(column) or "").strip()
+                for column in HARMONISATION_COLUMNS
+            }
+            # Not TARGET_PRODUCT: a `keep_separate` ruling has no
+            # surviving product to name. A `merge` without one is
+            # caught below, where the decision is known.
+            empty = [
+                column
+                for column in ("SOURCE_SYSTEM", "MATNR", "DECISION")
+                if not values[column]
+            ]
+            if empty:
+                raise ExtractError(
+                    f"{file_path}: row {line} leaves {', '.join(empty)} empty; "
+                    "a decision that does not say what it decides about is "
+                    "not a decision"
+                )
             decisions.append(
                 HarmonisationDecision(
-                    source_system=row["SOURCE_SYSTEM"].strip().upper(),
-                    material=row["MATNR"].strip(),
-                    target_product=row["TARGET_PRODUCT"].strip(),
-                    decision=row["DECISION"].strip().lower(),
+                    source_system=values["SOURCE_SYSTEM"].upper(),
+                    material=values["MATNR"],
+                    target_product=values["TARGET_PRODUCT"],
+                    decision=values["DECISION"].lower(),
                     note=(row.get("NOTE") or "").strip(),
                 )
             )
@@ -157,6 +195,12 @@ def _validate_harmonisation(
                 f"{file_path}: {decision.source_system}/{decision.material} "
                 f"has decision '{decision.decision}', which the pipeline does "
                 f"not act on; use one of {', '.join(sorted(HARMONISATION_DECISIONS))}"
+            )
+        if decision.decision == "merge" and not decision.target_product:
+            raise ExtractError(
+                f"{file_path}: {decision.source_system}/{decision.material} "
+                "is to be merged but names no surviving product; without "
+                "one the record has nowhere to land"
             )
         key = (decision.source_system, decision.material.lstrip("0") or "0")
         if key in seen:
