@@ -1,3 +1,4 @@
+import copy
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -214,6 +215,74 @@ def test_a_harmonisation_decision_for_an_absent_material_fails_the_wave(tmp_path
     assert not outcome.reconciliation.passed
 
 
+def test_a_decision_naming_a_product_in_neither_system_fails_the_wave(tmp_path):
+    """Not a hold: the survivor does not exist, so the merge cannot run.
+
+    Cleansing holds the record back either way, which is exactly what a
+    legitimate hold looks like from the load file. Only the decision
+    table says which of the two it is.
+    """
+    source = tmp_path / "wave0"
+    shutil.copytree(WAVE0, source)
+    with open(source / extract.HARMONISATION_FILE, "a", encoding="utf-8") as handle:
+        handle.write(
+            "GVP,000000000000700310,999999,merge,Survivor is in neither system\n"
+        )
+
+    outcome = pipeline.run(
+        wave="wave0", source_dir=source, out_dir=tmp_path / "out", write_files=False
+    )
+    check = next(
+        check for check in outcome.reconciliation.checks if check.id == "REC-MRG-004"
+    )
+    assert not check.passed
+    assert "in neither system" in check.note
+    assert "GVP/000000000000700310 -> 999999" in check.note
+    assert not outcome.reconciliation.passed
+
+
+def test_a_stranded_merge_survivor_fails_the_wave(result):
+    """REC-MRG-003 has to notice a survivor missing from the load file."""
+    from datamig import reconcile
+
+    harmonisation = mapping.ProductHarmonisation(
+        extract.read_harmonisation(WAVE0 / extract.HARMONISATION_FILE)
+    )
+    accepted = result.cleansing["materials"].accepted
+    survivors = {
+        harmonisation.target_product(row)
+        for row in accepted
+        if harmonisation.is_merged(row)
+    }
+    assert survivors, "fixture must apply at least one merge"
+
+    dropped = sorted(survivors)[0]
+    products = copy.copy(result.product_result)
+    products.products = [
+        row for row in result.product_result.products if row["Product"] != dropped
+    ]
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=[],
+        accepted_open_items=[],
+        loaded_open_items=[],
+        accepted_stock=[],
+        loaded_stock=[],
+        accepted_partners=0,
+        partner_identities=0,
+        business_partners=0,
+        merged_partners=0,
+        xref={},
+        products=products,
+        harmonisation=harmonisation,
+        accepted_materials=accepted,
+    )
+    check = next(c for c in broken.checks if c.id == "REC-MRG-003")
+    assert not check.passed
+    assert dropped in check.note
+
+
 def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     """REC-MRG-001 has to notice a record that never reached the load."""
     from datamig import reconcile
@@ -259,8 +328,13 @@ def test_stock_stranded_by_a_harmonisation_says_so(result):
     assert not any("700301" in key for key in stranded)
 
 
-def test_a_material_number_used_in_both_systems_is_flagged():
-    """The two systems share number ranges, so MATNR alone is ambiguous."""
+def test_a_material_number_used_in_both_systems_is_held_back():
+    """The two systems share number ranges, so MATNR alone is ambiguous.
+
+    Both records must wait: the target product number is the bare
+    number, so loading them would keep one master, discard the other
+    and silently move its batches onto an unrelated product.
+    """
     rows = [
         _material("GEP", "000000000000100801", "CORE ADJUVANT"),
         _material("GVP", "000000000000100801", "ANTIGEN BULK RSV"),
@@ -268,9 +342,24 @@ def test_a_material_number_used_in_both_systems_is_flagged():
     outcome = cleanse.cleanse_materials(rows)
     collisions = outcome.issues_for("DQ-MAT-009")
     assert len(collisions) == 1
-    assert collisions[0].action is Action.WARN
+    assert collisions[0].action is Action.REJECT
     assert "GEP/000000000000100801" in collisions[0].key
     assert "GVP/000000000000100801" in collisions[0].key
+    assert outcome.accepted == []
+    assert len(outcome.rejected) == 2
+
+
+def test_a_governed_decision_resolves_a_shared_material_number():
+    """The collision is only a collision while nobody has decided."""
+    rows = [
+        _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+        _material("GVP", "000000000000100801", "CORE ADJUVANT"),
+    ]
+    outcome = cleanse.cleanse_materials(
+        rows, {("GVP", "000000000000100801"): "100801"}
+    )
+    assert outcome.issues_for("DQ-MAT-009") == []
+    assert len(outcome.accepted) == 2
 
 
 def test_a_material_number_unique_to_one_system_is_not_flagged():

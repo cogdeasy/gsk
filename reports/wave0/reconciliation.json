@@ -153,8 +153,8 @@
     {
       "id": "REC-MRG-003",
       "description": "every harmonised material resolves to a loaded product",
-      "source_value": "23 target products",
-      "target_value": "23 in the load file",
+      "source_value": "3 survivors named by decisions",
+      "target_value": "3 in the load file",
       "status": "PASS",
       "note": ""
     },

@@ -133,6 +133,8 @@ def _merge_checks(
     products: ProductResult | None,
     harmonisation: ProductHarmonisation | None,
     rejected_materials: set[tuple[str, str]],
+    accepted_materials: list[dict[str, str]],
+    extracted_products: set[str],
 ) -> list[Check]:
     """Prove that every record the merge removed was meant to go."""
     checks: list[Check] = []
@@ -161,18 +163,18 @@ def _merge_checks(
         material_counts = next(
             (count for count in counts if count.object_name == "materials"), None
         )
-        accepted_materials = len(products.xref)
+        mapped_materials = len(products.xref)
         checks.append(
             Check(
                 id="REC-MRG-002",
                 description="material records minus harmonisations equals products",
                 source_value=(
-                    f"{accepted_materials} materials - "
+                    f"{mapped_materials} materials - "
                     f"{products.merged_count} harmonised"
                 ),
                 target_value=f"{len(products.products)} products",
                 passed=(
-                    accepted_materials - products.merged_count
+                    mapped_materials - products.merged_count
                     == len(products.products)
                 ),
                 note=(
@@ -182,24 +184,33 @@ def _merge_checks(
             )
         )
 
-        # A harmonisation decision that points at a product which is not
-        # in the load file would silently strand the retired material's
-        # stock and history, so the target has to exist.
+    if products is not None and harmonisation is not None:
+        # The survivor of each merge is named by the governed decision
+        # table and looked up against the load file, never read back off
+        # the mapping's own cross reference: a mapping that loses the
+        # surviving product would otherwise lose it from both sides of
+        # the check and still balance. Cleansing holds back a merge
+        # whose survivor was rejected (DQ-MAT-010), so on clean data
+        # this is the mapping's guarantee rather than the extract's.
+        merge_targets = {
+            harmonisation.target_product(row)
+            for row in accepted_materials
+            if harmonisation.is_merged(row)
+        }
         loaded_products = {row["Product"] for row in products.products}
-        stranded = sorted(
-            product for product in products.xref.values()
-            if product not in loaded_products
-        )
+        stranded = sorted(merge_targets - loaded_products)
         checks.append(
             Check(
                 id="REC-MRG-003",
                 description="every harmonised material resolves to a loaded product",
-                source_value=f"{len(set(products.xref.values()))} target products",
-                target_value=f"{len(loaded_products)} in the load file",
+                source_value=f"{len(merge_targets)} survivors named by decisions",
+                target_value=(
+                    f"{len(merge_targets) - len(stranded)} in the load file"
+                ),
                 passed=not stranded,
                 note=(
                     "" if not stranded
-                    else f"{len(stranded)} unresolved: {', '.join(stranded[:3])}"
+                    else f"{len(stranded)} stranded: {', '.join(stranded[:3])}"
                 ),
             )
         )
@@ -209,24 +220,41 @@ def _merge_checks(
             (system, material) for system, material in products.merged_materials
         }
         unapplied = set(harmonisation.merged_materials) - applied
+        targets = harmonisation.targets
         # A decision naming a material that cleansing rejected is
         # accounted for: the record is held back and visible in the
-        # exception report. A decision that is neither applied nor
-        # rejected names a material that is not in the extract at all -
-        # the merge simply did not happen, and nothing else would say
-        # so.
-        held = sorted(unapplied & rejected_materials)
-        stale = sorted(unapplied - rejected_materials)
+        # exception report. Two other outcomes look the same from the
+        # load file and are not accounted for at all - a decision whose
+        # material is not in the extract, and one whose surviving
+        # product does not exist in either system. The second is the
+        # more dangerous, because holding the record back is exactly
+        # what a legitimate hold looks like.
+        held: list[tuple[str, str]] = []
+        stale: list[tuple[str, str]] = []
+        invalid: list[tuple[str, str]] = []
+        for key in sorted(unapplied):
+            if key not in rejected_materials:
+                stale.append(key)
+            elif targets[key] not in extracted_products:
+                invalid.append(key)
+            else:
+                held.append(key)
+
+        def _named(keys: list[tuple[str, str]]) -> str:
+            return ", ".join(f"{system}/{material}" for system, material in keys)
+
         notes = []
         if held:
-            notes.append(
-                "held back by cleansing: "
-                + ", ".join(f"{system}/{material}" for system, material in held)
-            )
+            notes.append("held back by cleansing: " + _named(held))
         if stale:
+            notes.append("stale, no such material in the extract: " + _named(stale))
+        if invalid:
             notes.append(
-                "stale, no such material in the extract: "
-                + ", ".join(f"{system}/{material}" for system, material in stale)
+                "names a surviving product that is in neither system: "
+                + ", ".join(
+                    f"{system}/{material} -> {targets[(system, material)]}"
+                    for system, material in invalid
+                )
             )
         checks.append(
             Check(
@@ -234,7 +262,7 @@ def _merge_checks(
                 description="every harmonisation decision was applied or rejected",
                 source_value=f"{len(harmonisation.merged_materials)} decisions",
                 target_value=f"{len(applied)} applied, {len(held)} rejected",
-                passed=not stale,
+                passed=not stale and not invalid,
                 note="; ".join(notes),
             )
         )
@@ -260,6 +288,8 @@ def build(
     products: ProductResult | None = None,
     harmonisation: ProductHarmonisation | None = None,
     rejected_materials: set[tuple[str, str]] | None = None,
+    accepted_materials: list[dict[str, str]] | None = None,
+    extracted_products: set[str] | None = None,
 ) -> Reconciliation:
     reconciliation = Reconciliation(
         wave=wave,
@@ -335,6 +365,8 @@ def build(
             products=products,
             harmonisation=harmonisation,
             rejected_materials=rejected_materials or set(),
+            accepted_materials=accepted_materials or [],
+            extracted_products=extracted_products or set(),
         )
     )
 

@@ -18,7 +18,7 @@ assumed.
 
 The multiplier is applied to raw remediation effort in the backlog
 report, so the plan shows the validation overhead as a separate number
-rather than burying it. For the current estate that is 58 of 184
+rather than burying it. For the current estate that is 93 of 274
 engineer-days.
 
 ## Evidence per remediated object
@@ -31,8 +31,8 @@ An object is not done until all four exist:
 2. **Automated test evidence** - an ABAP Unit test class named
    `<object>.testclasses.abap`, running against a test double rather
    than client data so the run is reproducible in any client. Rule
-   `SI-GXP-001` fails any GxP object without one; there are currently
-   9 such objects.
+   `SI-GXP-001` fails any GxP object without one; 13 outstanding
+   objects across the two systems are short of one.
 3. **Review record** - the pull request. One remediated object per PR,
    reviewed by the object owner named in the inventory.
 4. **Regression run** - the object's tests green in CI on the wave

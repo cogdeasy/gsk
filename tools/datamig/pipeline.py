@@ -143,6 +143,10 @@ def run(
             # accepted ECC rows and the governed decision table rather
             # than from the mapping's own cross reference, so a defect
             # in the mapping cannot cancel itself out on both sides.
+            # A merged material contributes its survivor's key, so this
+            # check sees a dropped, duplicated or invented record only
+            # for the materials that keep their own number. The merged
+            # ones are covered by REC-MRG-002 and REC-MRG-003.
             source_keys=frozenset(
                 harmonisation.target_product(row) for row in materials.accepted
             ),
@@ -221,6 +225,14 @@ def run(
         harmonisation=harmonisation,
         rejected_materials={
             (row["SOURCE_SYSTEM"], row["MATNR"]) for row in materials.rejected
+        },
+        accepted_materials=materials.accepted,
+        # Every number the extract knows about, accepted or not. A
+        # harmonisation decision naming a product outside this set names
+        # a product that exists in neither system.
+        extracted_products={
+            mapping.strip_leading_zeros(row["MATNR"])
+            for row in datasets["materials"].rows
         },
     )
 

@@ -102,7 +102,7 @@ Current state of the estate:
 | Estimated effort | 274 engineer-days, of which 93 is GxP validation overhead |
 | Cleared so far | 32 engineer-days |
 | Avoided by converging duplicates | 46.5 engineer-days across 4 of the 6 groups |
-| Avoided by decommissioning cross-system interfaces | 20 engineer-days |
+| Avoided by decommissioning cross-system interfaces | 19.6 engineer-days |
 
 An object leaves the backlog when `estate/inventory.csv` names its
 S/4HANA successor in `remediated_path`. The ECC source stays in
@@ -167,6 +167,17 @@ so - a governed decision, not a description match - and the `REC-MRG-*`
 checks prove the arithmetic, because with two sources loading into one
 client a smaller target count is both the intended outcome and what
 data loss looks like.
+
+**What the reconciliation does not prove.** The checks compare a value
+counted on the ECC side with the same value counted off the load file,
+so they catch a record the pipeline drops, duplicates, invents or
+mis-adds. They cannot tell you the extract was complete: delete a row
+from an ECC file and both sides agree on the smaller number. Proving
+that is the extract's job, and on a real programme it is a control
+total taken in the source system - a row count and a hash total per
+object, signed off before cutover, checked against the extract rather
+than derived from it. `data/wave0` has no such manifest, so that
+boundary is the honest limit of the evidence here.
 
 ## Layout
 

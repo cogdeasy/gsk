@@ -44,7 +44,7 @@ Both ECC systems load into one S/4HANA client. These are the records each contri
 | REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | PASS |  |
 | REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | PASS | 7 BPs are held in both source systems |
 | REC-MRG-002 | material records minus harmonisations equals products | 26 materials - 3 harmonised | 23 products | PASS | 4 rejected before mapping |
-| REC-MRG-003 | every harmonised material resolves to a loaded product | 23 target products | 23 in the load file | PASS |  |
+| REC-MRG-003 | every harmonised material resolves to a loaded product | 3 survivors named by decisions | 3 in the load file | PASS |  |
 | REC-MRG-004 | every harmonisation decision was applied or rejected | 4 decisions | 3 applied, 1 rejected | PASS | held back by cleansing: GVP/000000000000700301 |
 | REC-FI-VAL-BE01-EUR | open item value total BE01 EUR | 6448000.00 | 6448000.00 | PASS |  |
 | REC-FI-VAL-BE02-EUR | open item value total BE02 EUR | 18072000.00 | 18072000.00 | PASS |  |

@@ -22,7 +22,7 @@ not a flat list:
 
 ```bash
 s4scan scan abap/ecc --format markdown --out /tmp/backlog.md
-head -60 /tmp/backlog.md
+sed -n '/^## Prioritised backlog/,/^## Object detail/p' /tmp/backlog.md
 ```
 
 The backlog is ordered by wave, then severity, then business exposure
@@ -38,7 +38,8 @@ will cost.
 
 ## 1b. Two systems, one target (3 min)
 
-The same `make scan` output ends with the part no SAP tool produces:
+The same `make scan` output carries the part no SAP tool produces,
+just above the rule counts:
 
 ```
 source systems:
@@ -74,13 +75,13 @@ target where removing it costs more.
 And the two objects that simply go:
 
 ```bash
-sed -n '/Decommissioned at the merge/,/^## /p' /tmp/backlog.md
+sed -n '/^## Decommissioned at merge/,/^## Remediated/p' /tmp/backlog.md
 ```
 
 An intercompany interface moves antigen bulk from Vaccines to the core
 as a sale, with an IDoc each way and a validated interface at both
 ends. In one client that is an internal stock transport, and both
-programs have no job. They leave the backlog but stay scanned - 20
+programs have no job. They leave the backlog but stay scanned - 19.6
 engineer-days that were never really in the plan.
 
 Talking point: this is the part of a consolidation that is currently
@@ -137,14 +138,32 @@ make migrate
 ```
 
 Wave 0, both ECC systems in one run: 149 records extracted, 22 held
-back. Every reject is named:
+back. Nothing is dropped silently - every reject carries a rule id, the
+source key and what to do about it. The full list is
+`reports/wave0/exceptions_*.csv`; run
 
-- a batch-managed vaccine with no shelf life (GMP data rule);
-- an FI document out of balance by 10 cents;
-- an open item for a customer that does not exist in the master;
-- batch stock for a material that is not batch managed;
-- batch stock in a unit the material master contradicts;
-- a customer with country code `XX`.
+```bash
+cut -d, -f1,2 reports/wave0/exceptions_*.csv | grep reject | sort | uniq -c
+```
+
+for the tally. The ones worth reading out:
+
+- a batch-managed vaccine with no shelf life, `DQ-MAT-006` (GMP data
+  rule);
+- two FI documents that do not balance, `DQ-FI-001` - one out by 10
+  cents, one by 55,000;
+- an open item for a customer that does not exist in the master,
+  `DQ-FI-002`;
+- batch stock for a material that is not batch managed, `DQ-STK-002`;
+- batch stock in a unit the material master contradicts, `DQ-STK-005`;
+- a customer with country code `XX`, `DQ-CUS-003`;
+- a customer and a vendor with no name or country, `DQ-CUS-002` and
+  `DQ-VEN-002`;
+- a material with a gross weight but no weight unit, `DQ-MAT-004`;
+- a Vaccines material whose harmonisation survivor was itself
+  rejected, `DQ-MAT-010`, and the two batches held with it,
+  `DQ-STK-006`;
+- stock for a material that never reached the master, `DQ-STK-001`.
 
 The collision to point at first:
 

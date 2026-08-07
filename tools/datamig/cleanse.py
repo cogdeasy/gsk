@@ -182,7 +182,7 @@ def cleanse_materials(
             result.rejected.append(row)
         else:
             result.accepted.append(row)
-            numbers[row["MATNR"]].append(key)
+            numbers[row["MATNR"]].append(row)
 
     for description, keys in descriptions.items():
         if len(keys) > 1:
@@ -198,20 +198,57 @@ def cleanse_materials(
                        f"{scope}, confirm the harmonisation decision")
             )
 
-    for number, keys in numbers.items():
-        if len({key.split("/")[0] for key in keys}) > 1:
-            result.issues.append(
-                _issue("DQ-MAT-009", Action.WARN, "materials", ", ".join(keys),
-                       "MATNR",
-                       f"material number {number} is used in both source "
-                       "systems; the target product number cannot be "
-                       "carried over from either")
-            )
+    _reject_undecided_collisions(result, numbers, harmonisation_targets or {})
 
     if harmonisation_targets:
         _reject_orphaned_merges(result, harmonisation_targets)
 
     return result
+
+
+def _reject_undecided_collisions(
+    result: CleanseResult,
+    numbers: dict[str, list[dict[str, str]]],
+    harmonisation_targets: dict[tuple[str, str], str],
+) -> None:
+    """Hold back a material number that means two things.
+
+    The systems were configured from one template and share number
+    ranges, so the same MATNR can hold unrelated products. The target
+    product number is the bare number, so loading both would keep the
+    first record, discard the second's master data and re-point its
+    batches at the wrong product. Which one survives is a stewardship
+    decision, so both wait for one.
+    """
+    colliding: list[dict[str, str]] = []
+
+    for number, rows in numbers.items():
+        undecided = [
+            row for row in rows
+            if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+        ]
+        systems = {row["SOURCE_SYSTEM"] for row in undecided}
+        if len(systems) < 2:
+            continue
+        keys = ", ".join(source_key(row, "MATNR") for row in undecided)
+        colliding.extend(undecided)
+        result.issues.append(
+            _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR",
+                   f"material number {number} is used in both source systems "
+                   "for different products and no harmonisation decision "
+                   "nominates a survivor; the target product number cannot "
+                   "be carried over from either")
+        )
+
+    if not colliding:
+        return
+
+    rejected = {source_key(row, "MATNR") for row in colliding}
+    result.accepted[:] = [
+        row for row in result.accepted
+        if source_key(row, "MATNR") not in rejected
+    ]
+    result.rejected.extend(colliding)
 
 
 def _reject_orphaned_merges(

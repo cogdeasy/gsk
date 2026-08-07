@@ -133,6 +133,22 @@ not inferred from matching descriptions. The pipeline reads
 and applies exactly that. Descriptions that match without a decision
 are raised as `DQ-MAT-008` for a steward to look at.
 
+**A shared material number without a decision is a reject, not a
+warning.** Partners are merged on the legal entity, so a reused
+customer number is only ever a reporting problem. Materials have no
+such discriminator: the target product number is the bare MATNR, so
+the same number in both systems resolves to one product and the second
+record would lose its master data and hand its batches to whatever the
+first record was. `DQ-MAT-009` holds both records back until a
+harmonisation decision nominates the survivor - the one case where the
+tooling refuses to guess and stops the load rather than logging it.
+
+**A decision has to name a product that exists.** `REC-MRG-004`
+separates a decision held back by cleansing from one naming a survivor
+that is in neither extract. Both look identical in the load file - the
+record simply is not there - and only the decision table distinguishes
+a hold that will clear from a merge that can never run.
+
 **A merge inherits the quality of its target.** `DQ-MAT-010` is the
 consequence: if the surviving product is rejected by cleansing, the
 record that was to be retired has nowhere to land, and loading it under
