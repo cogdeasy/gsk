@@ -191,6 +191,16 @@ class Inventory:
 
         A group id with only one member is not a duplication - there is
         nothing to converge - so it must not be reported as one.
+
+        Decommissioned members do not count. A duplicate that is being
+        switched off rather than rebuilt leaves nothing to converge
+        with, and counting it would flag the survivor as duplicated
+        while the convergence backlog - which prices only outstanding
+        members - showed no group at all.
         """
-        members = self.convergence_group(group_id)
+        members = [
+            entry
+            for entry in self.convergence_group(group_id)
+            if not entry.is_decommissioned
+        ]
         return len({entry.source_system for entry in members}) > 1

@@ -18,8 +18,6 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .identity import strip_leading_zeros
-
 # Source system -> sub-folder in the wave extract directory.
 SOURCE_SYSTEMS = {
     "GEP": "gep",
@@ -120,10 +118,11 @@ def _validate_harmonisation(
 ) -> None:
     """Refuse a decision table that does not say one thing.
 
-    This is a governed table with a regulatory consequence, so an
-    ambiguity in it is a defect in the input, not something for the
-    pipeline to resolve by file order or by following a chain nobody
-    signed off.
+    This is a governed table with a regulatory consequence, so a
+    decision resolved by file order is not a decision. Chains are
+    caught by DQ-MAT-011 during cleansing instead: whether a target
+    number really disappears depends on what the extracts contain,
+    which is not knowable here.
     """
     seen: set[tuple[str, str]] = set()
     for decision in decisions:
@@ -134,24 +133,6 @@ def _validate_harmonisation(
                 "has more than one decision; the survivor must be named once"
             )
         seen.add(key)
-
-    merges = {
-        (decision.source_system, decision.material): decision
-        for decision in decisions
-        if decision.decision == "merge"
-    }
-    retired = {material for _, material in merges}
-    for (system, material), decision in sorted(merges.items()):
-        # A -> B -> C would need the pipeline to decide that A really
-        # means C. The decision table has to state that itself.
-        if decision.target_product in {
-            strip_leading_zeros(number) for number in retired
-        }:
-            raise ExtractError(
-                f"{file_path}: {system}/{material} merges into "
-                f"{decision.target_product}, which is itself retired by "
-                "another decision; name the surviving product directly"
-            )
 
 
 def extract_wave(source_dir: str | Path) -> dict[str, Dataset]:

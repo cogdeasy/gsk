@@ -137,7 +137,7 @@ review record the validation package needs.
 make migrate
 ```
 
-Wave 0, both ECC systems in one run: 149 records extracted, 22 held
+Wave 0, both ECC systems in one run: 151 records extracted, 26 held
 back. Nothing is dropped silently - every reject carries a rule id, the
 source key and what to do about it. The full list is
 `reports/wave0/exceptions_*.csv`; run
@@ -163,6 +163,9 @@ for the tally. The ones worth reading out:
 - a Vaccines material whose harmonisation survivor was itself
   rejected, `DQ-MAT-010`, and the two batches held with it,
   `DQ-STK-006`;
+- material number 100249 used by both systems for different products
+  with no decision naming a survivor, `DQ-MAT-009` - both records are
+  held, and the batch behind each is held with them, `DQ-STK-007`;
 - stock for a material that never reached the master, `DQ-STK-001`.
 
 The collision to point at first:
@@ -208,7 +211,7 @@ number and quietly splitting the product's stock in two.
 cat reports/wave0/reconciliation.md
 ```
 
-30 checks, all passing: counts, value totals per company code and
+35 checks, all passing: counts, value totals per company code and
 currency, debit/credit balance, quantity totals per plant, BP
 arithmetic, and the merge arithmetic (`REC-MRG-*`). That last group
 matters here - with two sources loading into one client, a smaller

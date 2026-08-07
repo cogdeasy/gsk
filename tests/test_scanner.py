@@ -37,6 +37,26 @@ def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
         Inventory.load(split)
 
 
+def test_a_counterpart_being_switched_off_is_not_a_duplication(tmp_path):
+    """Nothing to converge with, so SI-CONV-001 must not fire.
+
+    The group would price no work - `outstanding` drops decommissioned
+    members - and would not appear as already built either, leaving the
+    finding on the survivor contradicted by both tables.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    members = [index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row]
+    assert len(members) > 1
+    rows[members[-1]] = rows[members[-1]].replace(
+        ",CG-MM-STOCK,converge,", ",CG-MM-STOCK,decommission,"
+    )
+    mixed = tmp_path / "inventory.csv"
+    mixed.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    assert not Inventory.load(mixed).is_cross_system_group("CG-MM-STOCK")
+    assert Inventory.load(INVENTORY).is_cross_system_group("CG-MM-STOCK")
+
+
 def test_object_name_is_derived_from_the_file_name():
     assert object_name_for(Path("a/zgsk_mm_stock_overview.prog.abap")) == (
         "ZGSK_MM_STOCK_OVERVIEW"

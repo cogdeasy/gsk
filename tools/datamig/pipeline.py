@@ -185,12 +185,18 @@ def run(
         ObjectCounts(
             "batch_stock", batch_stock.source_count, len(batch_stock.rejected),
             len(result.stock), _warnings(batch_stock),
+            # Derived from the governed decision table for the same
+            # reason as the materials check above: map_stock resolves
+            # the product through products.xref, so reading the ECC
+            # side out of that same cross reference would move both
+            # sides together and a batch put onto the wrong survivor
+            # would reconcile clean.
             source_keys=frozenset(
                 "/".join(
                     (
                         row["SOURCE_SYSTEM"],
                         row["WERKS"],
-                        products.xref[source_key(row, "MATNR")],
+                        harmonisation.target_product(row),
                         row["LGORT"],
                         row["CHARG"],
                     )

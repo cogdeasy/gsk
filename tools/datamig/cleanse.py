@@ -126,7 +126,7 @@ def cleanse_materials(
     """
     result = CleanseResult(object_name="materials")
     descriptions: dict[str, list[str]] = defaultdict(list)
-    numbers: dict[str, list[str]] = defaultdict(list)
+    numbers: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
         key = source_key(row, "MATNR")
@@ -216,9 +216,49 @@ def cleanse_materials(
     _reject_undecided_collisions(result, numbers, harmonisation_targets or {})
 
     if harmonisation_targets:
+        _reject_unit_mismatches(result, harmonisation_targets)
         _reject_orphaned_merges(result, harmonisation_targets)
 
     return result
+
+
+def _reject_unit_mismatches(
+    result: CleanseResult, harmonisation_targets: dict[tuple[str, str], str]
+) -> None:
+    """Hold back a merge between materials held in different units.
+
+    Stock follows the harmonised product but keeps the base unit of the
+    master it came from, so merging a material held in KG into one held
+    in ST would put both quantities on one product with nothing to say
+    which is which. The plant total would still reconcile, because it
+    sums quantities without regard to unit.
+    """
+    units = {
+        strip_leading_zeros(row["MATNR"]): row["MEINS"]
+        for row in result.accepted
+        if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+    }
+
+    def mismatch(row: dict[str, str]) -> str | None:
+        target = harmonisation_targets.get((row["SOURCE_SYSTEM"], row["MATNR"]))
+        if target is None or target not in units:
+            return None
+        return None if units[target] == row["MEINS"] else target
+
+    mismatched = [row for row in result.accepted if mismatch(row)]
+    result.accepted[:] = [row for row in result.accepted if not mismatch(row)]
+
+    for row in mismatched:
+        target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
+        result.rejected.append(row)
+        result.harmonisation_holds[source_key(row, "MATNR")] = target
+        result.issues.append(
+            _issue("DQ-MAT-012", Action.REJECT, "materials",
+                   source_key(row, "MATNR"), "MEINS",
+                   f"held in {row['MEINS']} but harmonised into product "
+                   f"{target}, which is held in {units[target]}; the merge "
+                   "needs a conversion the decision does not state")
+        )
 
 
 def _reject_undecided_collisions(
@@ -317,10 +357,29 @@ def _reject_orphaned_merges(
     # equal first.
     result.accepted[:] = [row for row in result.accepted if not is_orphaned(row)]
 
+    # A number retired by some other decision. Only consulted when the
+    # target is missing from the load anyway: if a record in the other
+    # system still carries that number and survives, the product does
+    # exist and the decision is fine.
+    retired = {
+        strip_leading_zeros(material)
+        for _, material in harmonisation_targets
+    }
+
     for row in orphaned:
         target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
         result.rejected.append(row)
         result.harmonisation_holds[source_key(row, "MATNR")] = target
+        if target in retired:
+            result.issues.append(
+                _issue("DQ-MAT-011", Action.REJECT, "materials",
+                       source_key(row, "MATNR"), "MATNR",
+                       f"harmonised into product {target}, which another "
+                       "decision itself retires; a chain leaves the "
+                       "pipeline to decide what this material really "
+                       "became, so name the surviving product directly")
+            )
+            continue
         result.issues.append(
             _issue("DQ-MAT-010", Action.REJECT, "materials",
                    source_key(row, "MATNR"), "MATNR",

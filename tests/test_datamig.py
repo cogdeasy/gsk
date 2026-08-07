@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -373,17 +374,72 @@ def test_two_decisions_for_one_material_are_refused(tmp_path):
         extract.read_harmonisation(table)
 
 
-def test_a_merge_into_a_retired_material_is_refused(tmp_path):
-    """A -> B -> C asks the pipeline to infer that A means C."""
-    table = tmp_path / extract.HARMONISATION_FILE
-    table.write_text(
-        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
-        "GVP,000000000000700301,700302,merge,Into a material that is itself merged\n"
-        "GVP,000000000000700302,100236,merge,Into the core record\n",
-        encoding="utf-8",
+def test_a_merge_into_a_retired_material_is_refused():
+    """A -> B -> C asks the pipeline to infer that A means C.
+
+    Caught in cleansing rather than on read, because whether 700302
+    really disappears depends on the extracts: a record in the other
+    system carrying that number and surviving would make the decision
+    perfectly sound.
+    """
+    targets = {
+        ("GVP", "000000000000700301"): "700302",
+        ("GVP", "000000000000700302"): "100236",
+    }
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GVP", "000000000000700301", "ANTIGEN BULK RSV"),
+            _material("GVP", "000000000000700302", "ANTIGEN BULK RSV II"),
+            _material("GEP", "000000000000100236", "CORE ANTIGEN"),
+        ],
+        harmonisation_targets=targets,
     )
-    with pytest.raises(extract.ExtractError, match="itself retired"):
-        extract.read_harmonisation(table)
+    chained = outcome.issues_for("DQ-MAT-011")
+    assert [issue.key for issue in chained] == ["GVP/000000000000700301"]
+    assert "another decision itself retires" in chained[0].message
+    assert not outcome.issues_for("DQ-MAT-010")
+
+
+def test_a_survivor_in_the_other_system_is_not_a_chain():
+    """The same number retired in one system can survive in the other.
+
+    Refusing this on the decision table alone was a false positive: the
+    two systems share number ranges, so a retired GEP/100801 says
+    nothing about whether product 100801 exists.
+    """
+    targets = {
+        ("GEP", "000000000000100801"): "100236",
+        ("GVP", "000000000000700301"): "100801",
+    }
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GVP", "000000000000700301", "ADJUVANT WAVRE"),
+            _material("GVP", "000000000000100801", "ADJUVANT SURVIVOR"),
+            _material("GEP", "000000000000100236", "CORE ANTIGEN"),
+        ],
+        harmonisation_targets=targets,
+    )
+    assert not outcome.issues_for("DQ-MAT-011")
+    assert not outcome.issues_for("DQ-MAT-010")
+
+
+def test_a_merge_across_two_base_units_is_refused():
+    """Stock keeps its own master's unit but follows the survivor."""
+    targets = {("GVP", "000000000000700301"): "100251"}
+    survivor = _material("GEP", "000000000000100251", "CORE ADJUVANT")
+    survivor["MEINS"] = "ST"
+    retired = _material("GVP", "000000000000700301", "ADJUVANT WAVRE")
+    retired["MEINS"] = "KG"
+
+    outcome = cleanse.cleanse_materials(
+        [survivor, retired], harmonisation_targets=targets
+    )
+    mismatch = outcome.issues_for("DQ-MAT-012")
+    assert [issue.key for issue in mismatch] == ["GVP/000000000000700301"]
+    assert "held in KG" in mismatch[0].message
+    assert "held in ST" in mismatch[0].message
+    assert [row["MATNR"] for row in outcome.accepted] == ["000000000000100251"]
 
 
 def test_differently_padded_numbers_are_the_same_collision():
@@ -698,6 +754,56 @@ def test_reconciliation_detects_a_value_break(result):
         "REC-FI-VAL-GB01-GBP",
         "REC-FI-BAL-GB01",
     }
+
+
+def test_stock_on_the_wrong_merged_product_is_caught(tmp_path, monkeypatch):
+    """A mapping defect must not cancel itself out on both sides.
+
+    The ECC side of the stock count is derived from the governed
+    decision table, so a batch put onto some other product shows up as
+    a missing key rather than moving both sides together.
+    """
+    real_map_stock = mapping.map_stock
+
+    def wrong_product(row, materials, product_xref=None):
+        mapped = real_map_stock(row, materials, product_xref)
+        if mapped["Batch"] == "B2500112":
+            mapped["Product"] = "100236"
+        return mapped
+
+    monkeypatch.setattr(mapping, "map_stock", wrong_product)
+    outcome = pipeline.run(wave="wave0", source_dir=WAVE0, out_dir=tmp_path)
+
+    assert not outcome.reconciliation.passed
+    assert "REC-CNT-batch_stock" in {
+        check.id for check in outcome.reconciliation.failed_checks
+    }
+
+
+def test_the_printed_record_arithmetic_is_checked(result):
+    """The report asserts extracted - rejected - merged = loaded."""
+    from datamig import reconcile
+
+    counts = [dataclasses.replace(count) for count in result.reconciliation.counts]
+    materials = next(count for count in counts if count.object_name == "materials")
+    materials.merged += 1
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=counts,
+        accepted_open_items=result.cleansing["open_items"].accepted,
+        loaded_open_items=result.open_items,
+        accepted_stock=result.cleansing["batch_stock"].accepted,
+        loaded_stock=result.stock,
+        accepted_partners=len(result.cleansing["customers"].accepted)
+        + len(result.cleansing["vendors"].accepted),
+        partner_identities=len(result.business_partners.partners),
+        business_partners=len(result.business_partners.partners),
+        merged_partners=result.business_partners.merged_count,
+        xref=result.business_partners.xref,
+    )
+    assert "REC-ARI-materials" in {check.id for check in broken.failed_checks}
+    assert "REC-CNT-materials" not in {check.id for check in broken.failed_checks}
 
 
 def test_pipeline_writes_the_expected_artefacts(tmp_path):

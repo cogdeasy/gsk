@@ -150,6 +150,18 @@ tooling refuses to guess and stops the load rather than logging it.
 The batches on those materials are held with them under `DQ-STK-007`,
 which names the collision rather than reporting a missing master.
 
+**A decision has to say one thing.** A second decision row for the same
+material used to be resolved by file order, which is not a governed
+decision at all, so the extract refuses it. A decision naming a product
+that another decision itself retires is refused too, but during
+cleansing rather than on read: whether that number really disappears
+depends on the extracts, because a record in the other system carrying
+it may well survive. That is `DQ-MAT-011`, and a merge between
+materials held in different base units is `DQ-MAT-012` - stock follows
+the harmonised product but keeps its own master's unit, so the merge
+would put two units of measure under one product and the plant total
+would still balance.
+
 **A decision has to name a product that exists.** `REC-MRG-004`
 separates a decision held back by cleansing from one naming a survivor
 that is in neither extract. Both look identical in the load file - the
@@ -176,6 +188,11 @@ outcome - which is also exactly what data loss looks like. So:
 | `REC-MRG-002` | material records - harmonisations = products |
 | `REC-MRG-003` | every harmonised material resolves to a product that is actually in the load |
 | `REC-MRG-004` | every harmonisation decision was applied, or the material it names was rejected |
+| `REC-ARI-*` | the record-count table's own arithmetic: extracted - rejected - merged = loaded |
+
+`REC-ARI-*` exists because the report prints that identity under the
+count table. Printed and unchecked, it is a claim about the load file
+rather than evidence about it.
 
 The reconciliation report also breaks accepted records down by source
 system, so each side can see its own contribution to the merged total.

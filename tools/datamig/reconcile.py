@@ -333,6 +333,26 @@ def build(
                 note="; ".join(notes),
             )
         )
+        # The report states this arithmetic under the record-count
+        # table. Printing it without checking it makes the table a
+        # claim rather than evidence, and a mis-set `merged` would
+        # leave it silently describing a different load file.
+        expected = count.extracted - count.rejected - count.merged
+        reconciliation.checks.append(
+            Check(
+                id=f"REC-ARI-{count.object_name}",
+                description=(
+                    f"{count.object_name}: extracted - rejected - merged "
+                    "equals the load file"
+                ),
+                source_value=(
+                    f"{count.extracted} - {count.rejected} - "
+                    f"{count.merged} = {expected}"
+                ),
+                target_value=f"{count.loaded} rows loaded",
+                passed=expected == count.loaded,
+            )
+        )
 
     reconciliation.checks.append(
         Check(

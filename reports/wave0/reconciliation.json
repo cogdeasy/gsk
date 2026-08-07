@@ -7,7 +7,7 @@
   ],
   "accepted_by_system": {
     "materials": {
-      "GEP": 18,
+      "GEP": 17,
       "GVP": 8
     },
     "customers": {
@@ -23,17 +23,17 @@
       "GVP": 14
     },
     "batch_stock": {
-      "GEP": 14,
+      "GEP": 13,
       "GVP": 8
     }
   },
   "counts": [
     {
       "object": "materials",
-      "extracted": 30,
-      "rejected": 4,
+      "extracted": 31,
+      "rejected": 6,
       "merged": 3,
-      "loaded": 23,
+      "loaded": 22,
       "warnings": 6
     },
     {
@@ -62,10 +62,10 @@
     },
     {
       "object": "batch_stock",
-      "extracted": 31,
-      "rejected": 9,
+      "extracted": 32,
+      "rejected": 11,
       "merged": 0,
-      "loaded": 22,
+      "loaded": 21,
       "warnings": 10
     }
   ],
@@ -73,8 +73,16 @@
     {
       "id": "REC-CNT-materials",
       "description": "materials: every accepted record loaded once",
-      "source_value": "23 accepted keys",
-      "target_value": "23 keys in the load file",
+      "source_value": "22 accepted keys",
+      "target_value": "22 keys in the load file",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-ARI-materials",
+      "description": "materials: extracted - rejected - merged equals the load file",
+      "source_value": "31 - 6 - 3 = 22",
+      "target_value": "22 rows loaded",
       "status": "PASS",
       "note": ""
     },
@@ -87,10 +95,26 @@
       "note": ""
     },
     {
+      "id": "REC-ARI-customers",
+      "description": "customers: extracted - rejected - merged equals the load file",
+      "source_value": "25 - 2 - 0 = 23",
+      "target_value": "23 rows loaded",
+      "status": "PASS",
+      "note": ""
+    },
+    {
       "id": "REC-CNT-vendors",
       "description": "vendors: every accepted record loaded once",
       "source_value": "20 accepted keys",
       "target_value": "20 keys in the load file",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-ARI-vendors",
+      "description": "vendors: extracted - rejected - merged equals the load file",
+      "source_value": "21 - 1 - 0 = 20",
+      "target_value": "20 rows loaded",
       "status": "PASS",
       "note": ""
     },
@@ -103,10 +127,26 @@
       "note": ""
     },
     {
+      "id": "REC-ARI-open_items",
+      "description": "open_items: extracted - rejected - merged equals the load file",
+      "source_value": "42 - 6 - 0 = 36",
+      "target_value": "36 rows loaded",
+      "status": "PASS",
+      "note": ""
+    },
+    {
       "id": "REC-CNT-batch_stock",
       "description": "batch_stock: every accepted record loaded once",
-      "source_value": "22 accepted keys",
-      "target_value": "22 keys in the load file",
+      "source_value": "21 accepted keys",
+      "target_value": "21 keys in the load file",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-ARI-batch_stock",
+      "description": "batch_stock: extracted - rejected - merged equals the load file",
+      "source_value": "32 - 11 - 0 = 21",
+      "target_value": "21 rows loaded",
       "status": "PASS",
       "note": ""
     },
@@ -145,10 +185,10 @@
     {
       "id": "REC-MRG-002",
       "description": "material records minus harmonisations equals products",
-      "source_value": "26 materials - 3 harmonised",
-      "target_value": "23 products",
+      "source_value": "25 materials - 3 harmonised",
+      "target_value": "22 products",
       "status": "PASS",
-      "note": "4 rejected before mapping"
+      "note": "6 rejected before mapping"
     },
     {
       "id": "REC-MRG-003",
@@ -297,8 +337,8 @@
     {
       "id": "REC-STK-GB22",
       "description": "unrestricted stock quantity in plant GB22",
-      "source_value": "123960.000",
-      "target_value": "123960.000",
+      "source_value": "123000.000",
+      "target_value": "123000.000",
       "status": "PASS",
       "note": ""
     },
