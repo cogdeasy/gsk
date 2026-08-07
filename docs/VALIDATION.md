@@ -61,10 +61,11 @@ fails, so it is not an invariant, but it never looks at the extract
 and is no evidence that the extract arrived whole. An **invariant**
 derives both sides from the same data: it holds unless the tooling
 itself is broken, which is worth knowing but is not evidence about the
-load. The record arithmetic for materials, open items and stock is an
-invariant, because mapping emits one row per accepted record or stops;
-for customers and vendors it is compared, because the load file is the
-cross reference and is counted separately. An assessor should read the
+load. All of the record arithmetic is an invariant, because every
+mapping emits one row per accepted record or stops - partners
+included, where each accepted record is appended to its business
+partner unconditionally. The count checks beside it compare key sets
+and are the ones that fail on real data. An assessor should read the
 column, not the pass count.
 
 A wave cannot be signed off with a failing check. Warnings are allowed

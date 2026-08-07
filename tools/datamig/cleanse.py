@@ -270,6 +270,15 @@ def cleanse_materials(
                        f"{scope}, confirm the harmonisation decision")
             )
 
+    # The order is load-bearing, not incidental. Each stage removes its
+    # rejects from `result.accepted` before the next one reads it, which
+    # is what stops a record being rejected twice and counted twice in
+    # the evidence pack, and what decides which rule the steward is sent
+    # after: the collision is a fact about the extracts and outranks
+    # anything a decision says about the record, and a merge that cannot
+    # be performed at all (DQ-MAT-012) is a better answer than one whose
+    # survivor is missing (DQ-MAT-010) because the record it was already
+    # holding back is why it is missing.
     _reject_undecided_collisions(
         result, numbers, harmonisation_targets or {}, ruled_separate
     )
@@ -571,12 +580,19 @@ def cleanse_partners(
         keys = [key for key, _ in entries]
         identities = {identity for _, identity in entries}
         if len({key.split("/", 1)[0] for key in keys}) > 1 and len(identities) > 1:
-            names = sorted(identity[0] for identity in identities)
+            # Each name carried by its own key rather than as a second
+            # list beside them. Two parallel lists get read positionally,
+            # and one sorted while the other is in extract order tells
+            # the steward the number belongs to the wrong company in the
+            # wrong system - the opposite of what this rule is for.
+            named = sorted(
+                f"{key} {identity[0]}" for key, identity in entries
+            )
             result.issues.append(
                 _issue(f"{prefix}-008", Action.WARN, object_name, ", ".join(keys),
                        key_field,
                        f"number {number} exists in both source systems as "
-                       f"different entities ({' / '.join(names)}); it must "
+                       f"different entities ({'; '.join(named)}); it must "
                        "not be reused as the business partner number")
             )
 

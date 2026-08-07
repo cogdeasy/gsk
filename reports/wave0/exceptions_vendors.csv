@@ -10,4 +10,4 @@ DQ-VEN-006,warn,vendors,GVP/0000510034,ZZ_GMP_AUDITED,"supplier has no GMP audit
 DQ-VEN-007,warn,vendors,"GEP/0000510012, GEP/0000510020, GVP/0000510032",NAME1,records merge into one business partner across both source systems: LONZA AG
 DQ-VEN-007,warn,vendors,"GEP/0000510019, GVP/0000510031",NAME1,records merge into one business partner across both source systems: SGS LIFE SCIENCES
 DQ-VEN-007,warn,vendors,"GEP/0000510024, GVP/0000510033",NAME1,records merge into one business partner across both source systems: SCHOTT PHARMA AG
-DQ-VEN-008,warn,vendors,"GEP/0000510012, GVP/0000510012",LIFNR,number 510012 exists in both source systems as different entities (BIOQUELL UK LTD / LONZA AG); it must not be reused as the business partner number
+DQ-VEN-008,warn,vendors,"GEP/0000510012, GVP/0000510012",LIFNR,number 510012 exists in both source systems as different entities (GEP/0000510012 LONZA AG; GVP/0000510012 BIOQUELL UK LTD); it must not be reused as the business partner number

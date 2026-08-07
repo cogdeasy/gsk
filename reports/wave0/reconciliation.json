@@ -103,7 +103,7 @@
       "source_value": "25 - 2 - 0 = 23",
       "target_value": "23 rows loaded",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -121,7 +121,7 @@
       "source_value": "21 - 1 - 0 = 20",
       "target_value": "20 rows loaded",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {

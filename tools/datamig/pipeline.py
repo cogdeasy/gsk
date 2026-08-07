@@ -185,7 +185,6 @@ def run(
                 source_key(row, "KUNNR") for row in customers.accepted
             ),
             target_keys=loaded_sources["KNA1"],
-            loaded_independently=True,
         ),
         ObjectCounts(
             "vendors", vendors.source_count, len(vendors.rejected),
@@ -194,7 +193,6 @@ def run(
                 source_key(row, "LIFNR") for row in vendors.accepted
             ),
             target_keys=loaded_sources["LFA1"],
-            loaded_independently=True,
         ),
         ObjectCounts(
             "open_items", open_items.source_count, len(open_items.rejected),

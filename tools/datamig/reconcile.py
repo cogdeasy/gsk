@@ -84,12 +84,12 @@ class ObjectCounts:
     the count check capable of failing: a mapping that drops, duplicates
     or invents a record breaks it.
 
-    ``loaded_independently`` says whether ``loaded`` was counted off
-    something other than the accepted records - for partners, the
-    cross-reference rows that get written. Where it was not, mapping
-    emits one row per accepted record by construction, so the record
-    arithmetic restates its own source side and is reported as an
-    invariant rather than as evidence.
+    ``loaded`` is counted off the rows that will be written, which is
+    what lets ``duplicated`` see a record written twice. It is not
+    independent of the accepted count, though: every mapping in this
+    pipeline emits one row per accepted record or raises, partners
+    included, so the record arithmetic holds by construction and is
+    reported as an invariant rather than as evidence about the data.
     """
 
     object_name: str
@@ -100,7 +100,6 @@ class ObjectCounts:
     source_keys: frozenset[str] = frozenset()
     target_keys: frozenset[str] = frozenset()
     merged: int = 0
-    loaded_independently: bool = False
 
     @property
     def missing(self) -> frozenset[str]:
@@ -384,15 +383,16 @@ def build(
         # claim rather than evidence, and a mis-set `merged` would
         # leave it silently describing a different load file.
         #
-        # Only evidence where `loaded` was counted off the target. For
-        # the rest, mapping emits one row per accepted record or raises,
-        # so `extracted - rejected` is `len(accepted)` is `loaded` - the
-        # check catches a tooling defect, not a data one, and is
-        # labelled as the invariant it is.
+        # Never evidence about the data. Every mapping emits one row per
+        # accepted record or raises - partners too, where one entry goes
+        # onto the business partner per accepted row - so
+        # `extracted - rejected` is `len(accepted)` is `loaded`, and only
+        # a tooling defect can move the two sides apart. REC-CNT above
+        # is the one that compares key sets.
         expected = count.extracted - count.rejected - count.merged
         reconciliation.checks.append(
             Check(
-                evidence=COMPARED if count.loaded_independently else INVARIANT,
+                evidence=INVARIANT,
                 id=f"REC-ARI-{count.object_name}",
                 description=(
                     f"{count.object_name}: extracted - rejected - merged "

@@ -39,9 +39,9 @@ Both ECC systems load into one S/4HANA client. These are the records each contri
 | REC-CNT-materials | materials: every accepted record loaded once | 22 accepted keys | 22 keys in the load file | compared | PASS |  |
 | REC-ARI-materials | materials: extracted - rejected - merged equals the load file | 31 - 6 - 3 = 22 | 22 rows loaded | invariant | PASS |  |
 | REC-CNT-customers | customers: every accepted record loaded once | 23 accepted keys | 23 keys in the load file | compared | PASS |  |
-| REC-ARI-customers | customers: extracted - rejected - merged equals the load file | 25 - 2 - 0 = 23 | 23 rows loaded | compared | PASS |  |
+| REC-ARI-customers | customers: extracted - rejected - merged equals the load file | 25 - 2 - 0 = 23 | 23 rows loaded | invariant | PASS |  |
 | REC-CNT-vendors | vendors: every accepted record loaded once | 20 accepted keys | 20 keys in the load file | compared | PASS |  |
-| REC-ARI-vendors | vendors: extracted - rejected - merged equals the load file | 21 - 1 - 0 = 20 | 20 rows loaded | compared | PASS |  |
+| REC-ARI-vendors | vendors: extracted - rejected - merged equals the load file | 21 - 1 - 0 = 20 | 20 rows loaded | invariant | PASS |  |
 | REC-CNT-open_items | open_items: every accepted record loaded once | 36 accepted keys | 36 keys in the load file | compared | PASS |  |
 | REC-ARI-open_items | open_items: extracted - rejected - merged equals the load file | 42 - 6 - 0 = 36 | 36 rows loaded | invariant | PASS |  |
 | REC-CNT-batch_stock | batch_stock: every accepted record loaded once | 21 accepted keys | 21 keys in the load file | compared | PASS |  |

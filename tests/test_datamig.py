@@ -151,6 +151,11 @@ def test_a_number_reused_across_systems_raises_a_collision_warning(result):
     assert "GEP/0000210045" in issues[0].key
     assert "GVP/0000210045" in issues[0].key
     assert issues[0].action is Action.WARN
+    # Each company named against the key it belongs to. Two lists side
+    # by side get read positionally, and the steward chases the wrong
+    # record in the wrong system.
+    assert "GEP/0000210045 NHS SUPPLY CHAIN" in issues[0].message
+    assert "GVP/0000210045 INSTITUT PASTEUR DE DAKAR" in issues[0].message
 
 
 def test_a_number_padded_differently_by_each_system_still_collides():
@@ -1311,12 +1316,15 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
     evidence = {
         check.id: check.evidence for check in result.reconciliation.checks
     }
-    # Counted off the cross-reference rows that get written.
-    assert evidence["REC-ARI-customers"] == reconcile.COMPARED
-    assert evidence["REC-ARI-vendors"] == reconcile.COMPARED
-    # Mapping emits one row per accepted record or raises.
-    assert evidence["REC-ARI-materials"] == reconcile.INVARIANT
-    assert evidence["REC-ARI-open_items"] == reconcile.INVARIANT
+    # Every mapping emits one row per accepted record or raises -
+    # partners included, where the accepted row is appended to the
+    # business partner unconditionally - so no record arithmetic can be
+    # separated by bad data, only by a tooling defect.
+    assert all(
+        check.evidence == reconcile.INVARIANT
+        for check in result.reconciliation.checks
+        if check.id.startswith("REC-ARI-")
+    )
     assert evidence["REC-MRG-002"] == reconcile.INVARIANT
     # Goes and looks at the load file for the surviving product.
     assert evidence["REC-MRG-003"] == reconcile.COMPARED
@@ -1340,11 +1348,14 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
 def test_a_customer_lost_between_cleansing_and_load_breaks_the_arithmetic(
     tmp_path,
 ):
-    """The arithmetic has to read `loaded` off the rows being written.
+    """`loaded` is read off the rows being written, not off the accepted list.
 
-    Taking it from the accepted records instead makes the check restate
-    its own source side: extracted - rejected is the accepted count by
-    definition, so it would pass however many records mapping lost.
+    That is what lets `REC-CNT-customers` see a record written twice.
+    It does not make the arithmetic evidence about the data - mapping
+    appends one cross-reference entry per accepted row unconditionally,
+    so only a change to mapping can separate the two sides, which is
+    why the check is labelled an invariant and this test edits the
+    count by hand to reach the failure.
     """
     source = tmp_path / "wave0"
     shutil.copytree(WAVE0, source)
