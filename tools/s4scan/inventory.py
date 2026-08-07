@@ -186,6 +186,7 @@ class Inventory:
                 )
         inventory = cls(entries)
         inventory._check_groups_are_wave_aligned(path)
+        inventory._check_groups_agree_on_disposition(path)
         return inventory
 
     def _check_groups_are_wave_aligned(self, path: str | Path) -> None:
@@ -208,6 +209,32 @@ class Inventory:
                     f"{', '.join(sorted(group_waves))}; a group is planned "
                     "and delivered as one piece of work, so its members "
                     "belong in one wave"
+                )
+
+    def _check_groups_agree_on_disposition(self, path: str | Path) -> None:
+        """A group is switched off together or rebuilt together.
+
+        One member decommissioned and the other kept leaves a group
+        with a single surviving side - not a duplication, so it appears
+        in no convergence table, while the survivor's backlog row still
+        reads `converge (CG-...)` and points at a group the report
+        never mentions. Whether the second implementation dies with the
+        first is a programme decision, and a decision taken one cell at
+        a time is how the two halves of it drift apart.
+        """
+        dispositions: dict[str, set[str]] = {}
+        for entry in self._entries:
+            if entry.convergence_group:
+                dispositions.setdefault(entry.convergence_group, set()).add(
+                    entry.disposition
+                )
+        for group_id, group_dispositions in sorted(dispositions.items()):
+            if len(group_dispositions) > 1:
+                raise InventoryError(
+                    f"{path}: convergence group {group_id} is both "
+                    f"{' and '.join(sorted(group_dispositions))}; the members "
+                    "of a group collapse into one successor, so they are "
+                    "retired together or built together"
                 )
 
     def __len__(self) -> int:

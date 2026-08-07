@@ -66,6 +66,24 @@ def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
         Inventory.load(split)
 
 
+def test_a_group_switched_off_on_one_side_only_is_refused(tmp_path):
+    """One member decommissioned and one kept leaves no group at all.
+
+    A group needs two surviving sides to be a duplication, so with one
+    retired it appears in no convergence table - while the survivor's
+    backlog row still reads `converge (CG-...)` and names a group the
+    report never mentions again.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    member = next(index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row)
+    rows[member] = rows[member].replace(",converge,", ",decommission,")
+    mixed = tmp_path / "inventory.csv"
+    mixed.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(InventoryError, match="CG-MM-STOCK is both"):
+        Inventory.load(mixed)
+
+
 def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
     """`wave10` sorts before `wave2` as text and after it as a wave.
 
@@ -124,23 +142,21 @@ def test_a_group_with_nothing_left_to_build_has_no_estimate():
         report.ConvergenceEstimate.from_group(group)
 
 
-def test_a_counterpart_being_switched_off_is_not_a_duplication(tmp_path):
+def test_a_counterpart_being_switched_off_is_not_a_duplication():
     """Nothing to converge with, so SI-CONV-001 must not fire.
 
     The group would price no work - `outstanding` drops decommissioned
     members - and would not appear as already built either, leaving the
     finding on the survivor contradicted by both tables.
-    """
-    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
-    members = [index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row]
-    assert len(members) > 1
-    rows[members[-1]] = rows[members[-1]].replace(
-        ",CG-MM-STOCK,converge,", ",CG-MM-STOCK,decommission,"
-    )
-    mixed = tmp_path / "inventory.csv"
-    mixed.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
-    assert not Inventory.load(mixed).is_cross_system_group("CG-MM-STOCK")
+    Asserted on the predicate rather than through a loaded inventory,
+    because that shape of inventory is now refused on read: keeping the
+    predicate honest still matters, since a scan of part of the estate
+    reaches the same one-surviving-member state without any row saying
+    so.
+    """
+    assert not is_a_duplication([("GEP", False), ("GVP", True)])
+    assert is_a_duplication([("GEP", False), ("GVP", False)])
     assert Inventory.load(INVENTORY).is_cross_system_group("CG-MM-STOCK")
 
 

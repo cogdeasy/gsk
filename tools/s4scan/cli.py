@@ -167,6 +167,17 @@ def _summary(result) -> str:
     for severity, count in counts.items():
         lines.append(f"  {severity:<9}: {count}")
 
+    # Under `--system` the counts above are the view's and the
+    # convergence figures below are the whole group's, because a group
+    # is cross-system by definition and pricing one side of it would be
+    # a wrong number. Both are right; adjacent and unlabelled, one of
+    # them is read as the other.
+    if result.is_filtered and result.estate is not None:
+        lines.append(
+            f"  (this view of a {len(result.estate)}-object estate; the "
+            "convergence figures below are the whole group's)"
+        )
+
     by_system = by_source_system(result)
     if by_system:
         lines.append("")

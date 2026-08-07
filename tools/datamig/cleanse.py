@@ -129,10 +129,6 @@ class CleanseResult:
     def source_count(self) -> int:
         return len(self.accepted) + len(self.rejected)
 
-    def counts_by_action(self) -> dict[str, int]:
-        counter = Counter(issue.action.value for issue in self.issues)
-        return {action.value: counter.get(action.value, 0) for action in Action}
-
     def issues_for(self, rule_id: str) -> list[Issue]:
         return [issue for issue in self.issues if issue.rule_id == rule_id]
 
@@ -578,15 +574,19 @@ def _reject_orphaned_merges(
         )
 
 
+#: One extracted partner row under the number it was extracted with.
+#: The identity is absent where the row does not carry enough of one -
+#: unknown, which the rules below distinguish from different.
+_NumberedPartner = tuple[str, "PartnerIdentity | None", dict[str, str]]
+
+
 def cleanse_partners(
     rows: list[dict[str, str]], object_name: str, key_field: str
 ) -> CleanseResult:
     result = CleanseResult(object_name=object_name)
     prefix = "DQ-CUS" if object_name == "customers" else "DQ-VEN"
     seen: dict[PartnerIdentity, list[str]] = defaultdict(list)
-    numbers: dict[
-        str, list[tuple[str, PartnerIdentity, dict[str, str]]]
-    ] = defaultdict(list)
+    numbers: dict[str, list[_NumberedPartner]] = defaultdict(list)
 
     for row in rows:
         key = source_key(row, key_field)
@@ -631,21 +631,22 @@ def cleanse_partners(
                        "supplier has no GMP audit flag, confirm before cutover")
             )
 
-        # Recorded for any row whose identity is usable, accepted or
-        # not: the collision is a fact about the two extracts, and a
-        # record rejected for an unrelated reason would otherwise hide
-        # it until the wave that repairs the record. A row rejected
-        # *because* its name or country is missing is excluded - its
-        # identity is empty, so it would read as a different entity
-        # rather than an unknown one.
-        if row["NAME1"] and row["LAND1"]:
-            # Unpadded, like the material collision rule: KUNNR and
-            # LIFNR are CHAR10 and the two extract programs need not
-            # pad alike, so grouping on the number as written would
-            # miss GEP's 0000210045 against GVP's 210045.
-            numbers[strip_leading_zeros(row[key_field])].append(
-                (key, partner_identity(row), row)
-            )
+        # Every extracted row, accepted or not, like the material
+        # collision rule: a number reused across the two systems is a
+        # fact about the extracts, and recording only clean rows would
+        # hide it until the wave that repairs the incomplete one.
+        #
+        # A row with no name or country carries no identity, which is
+        # not the same as carrying a different one - so it is recorded
+        # as unknown rather than as a distinct company, and the rules
+        # below decide separately what to do with it.
+        #
+        # Unpadded: KUNNR and LIFNR are CHAR10 and the two extract
+        # programs need not pad alike, so grouping on the number as
+        # written would miss GEP's 0000210045 against GVP's 210045.
+        numbers[strip_leading_zeros(row[key_field])].append(
+            (key, partner_identity(row) if row["NAME1"] and row["LAND1"] else None, row)
+        )
 
         if reject:
             result.rejected.append(row)
@@ -656,22 +657,32 @@ def cleanse_partners(
     # different entities the merge must key on the entity, not the
     # number, so the collision is reported before the load rather than
     # discovered as a wrongly combined partner afterwards.
-    def _named(group: list[tuple[str, PartnerIdentity, dict[str, str]]]) -> str:
+    def _named(group: list[_NumberedPartner]) -> str:
         # Each name carried by its own key rather than as a second list
         # beside them. Two parallel lists get read positionally, and one
         # sorted while the other is in extract order tells the steward
         # the number belongs to the wrong company in the wrong system -
         # the opposite of what these rules are for.
-        return "; ".join(sorted(f"{key} {identity[0]}" for key, identity, _ in group))
+        return "; ".join(sorted(
+            f"{key} {identity[0] if identity else 'name or country missing'}"
+            for key, identity, _ in group
+        ))
 
     for number, entries in numbers.items():
-        by_system: dict[str, list[tuple[str, PartnerIdentity, dict[str, str]]]] = (
-            defaultdict(list)
-        )
+        by_system: dict[str, list[_NumberedPartner]] = defaultdict(list)
         for key, identity, row in entries:
             by_system[key.split("/", 1)[0]].append((key, identity, row))
 
-        if len(by_system) > 1 and len({identity for _, identity, _ in entries}) > 1:
+        # Only rows that say who they are. A row missing its name is
+        # not evidence that the number means two companies, and warning
+        # that it might sends a steward to compare a record against a
+        # blank - the repair to make is the missing field, which its
+        # own reject already names.
+        identified = {identity for _, identity, _ in entries if identity}
+        systems_identified = {
+            key.split("/", 1)[0] for key, identity, _ in entries if identity
+        }
+        if len(systems_identified) > 1 and len(identified) > 1:
             result.issues.append(
                 _issue(f"{prefix}-008", Action.WARN, object_name,
                        [key for key, _, _ in entries], key_field,
@@ -698,12 +709,22 @@ def cleanse_partners(
             # agree either.
             if len(group) < 2:
                 continue
-            entities = {identity for _, identity, _ in group}
-            fault = (
-                f"for different entities ({_named(group)})"
-                if len(entities) > 1
-                else f"for the same company ({next(iter(entities))[0]}), twice"
-            )
+            named = [entry for entry in group if entry[1]]
+            entities = {identity for _, identity, _ in named}
+            if len(entities) > 1:
+                fault = f"for different entities ({_named(group)})"
+            elif len(named) < len(group):
+                # Whose the second row is cannot be told, which changes
+                # nothing: one source key still cannot carry two
+                # records. Said plainly rather than guessed at, because
+                # the guess a steward would make is that they are the
+                # same company and one row can go.
+                fault = (
+                    "and one of them is too incomplete to say whose it is "
+                    f"({_named(group)})"
+                )
+            else:
+                fault = f"for the same company ({next(iter(entities))[0]}), twice"
             result.issues.append(
                 _issue(f"{prefix}-009", Action.REJECT, object_name,
                        [key for key, _, _ in group], key_field,

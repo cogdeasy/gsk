@@ -227,6 +227,66 @@ def test_one_number_twice_in_one_extract_holds_both_records():
     assert outcome.issues_for("DQ-CUS-008") == []
 
 
+def test_a_number_reused_twice_is_held_even_when_one_row_says_nothing():
+    """A row with no name still occupies the number.
+
+    The collision used to be recorded only for rows carrying a usable
+    identity, so a duplicate where one side was also missing its name
+    raised nothing at all - the wave repaired the name, and the number
+    the two records share surfaced a wave later. Whose the second
+    record is cannot be told, but that is not the question: one source
+    key cannot carry two of them either way.
+    """
+    def customer(name: str, country: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": "0000210045", "NAME1": name,
+            "LAND1": country, "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [customer("NHS SUPPLY CHAIN", "GB"), customer("", "")],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    held = outcome.issues_for("DQ-CUS-009")
+    assert len(held) == 1
+    assert "too incomplete to say whose it is" in held[0].message
+    assert "GEP/0000210045 name or country missing" in held[0].message
+    assert outcome.accepted == []
+    # The incomplete row is rejected for being incomplete and held for
+    # the collision; it is still one record out of the load.
+    assert len(outcome.rejected) == 2
+
+
+def test_an_incomplete_row_is_not_reported_as_a_second_company():
+    """Unknown is not different.
+
+    The cross-system warning names two companies sharing a number. A
+    row with no name is not a second company - it is a record to
+    repair, which its own reject already says - and reporting it as
+    one sends a steward to compare a master against a blank.
+    """
+    def customer(system: str, name: str, country: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": system, "KUNNR": "0000210045", "NAME1": name,
+            "LAND1": country, "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [customer("GEP", "NHS SUPPLY CHAIN", "GB"), customer("GVP", "", "")],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    assert outcome.issues_for("DQ-CUS-008") == []
+    assert outcome.issues_for("DQ-CUS-009") == []
+
+
 def test_a_record_already_rejected_is_not_held_a_second_time():
     """The two rows share a key, so key-based removal counts one twice."""
     def customer(number: str, name: str, country: str = "GB") -> dict[str, str]:
