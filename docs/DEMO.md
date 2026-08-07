@@ -15,8 +15,9 @@ make setup
 make scan
 ```
 
-16 custom objects, 204 findings, 35 of them blockers. Then the point
-that matters - it is not a flat list:
+16 custom objects, 184 findings outstanding, 31 of them blockers, plus
+what has already been cleared. Then the point that matters - it is not
+a flat list:
 
 ```bash
 s4scan scan abap/src --format markdown --out /tmp/backlog.md
@@ -26,8 +27,8 @@ head -60 /tmp/backlog.md
 The backlog is ordered by wave, then severity, then business exposure
 (monthly execution volume and business criticality from
 `estate/inventory.csv`). Effort is sized per object and inflated by the
-GxP validation multiplier, so the plan separates 126 days of
-engineering from 58 days of validation overhead.
+GxP validation multiplier, so the plan separates 115 days of
+engineering from 53 days of validation overhead.
 
 Talking point: an SAP readiness check tells you which simplification
 items you hit. This tells you which objects to do first, who owns them,
@@ -53,6 +54,11 @@ Compare `abap/src/mm/zgsk_mm_stock_overview.prog.abap` with
 The definition of done is machine-checked, and CI enforces it. That is
 what makes remediation at volume reviewable: the mechanical parts are
 gated, so review attention goes to the business logic.
+
+The inventory row for the object now names that successor in
+`remediated_path`, which is what drops it out of the backlog and moves
+its days into "cleared" - so the same command that sizes the programme
+also reports its progress.
 
 ## 3. Give the work to an agent (5 min, live)
 
@@ -111,6 +117,6 @@ tested, re-runnable per wave, and improvable each time the wave repeats.
 make check
 ```
 
-ruff, 64 tests, and the readiness gate. CI additionally fails if the
+ruff, the test suite, and the readiness gate. CI additionally fails if the
 committed reports in `reports/` are stale, so the measurement can never
 drift from the code.

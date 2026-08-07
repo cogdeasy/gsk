@@ -60,7 +60,8 @@ def priority_score(obj: ObjectResult) -> tuple:
 
 
 def build_backlog(result: ScanResult) -> list[ObjectResult]:
-    return sorted(result.objects_with_findings(), key=priority_score)
+    """Outstanding work, prioritised. Remediated objects drop out."""
+    return sorted(result.outstanding(), key=priority_score)
 
 
 def to_json(result: ScanResult) -> str:
@@ -68,14 +69,28 @@ def to_json(result: ScanResult) -> str:
     payload = {
         "summary": {
             "objects_scanned": len(result.objects),
-            "objects_with_findings": len(backlog),
+            "objects_with_findings": len(result.objects_with_findings()),
+            "objects_remediated": len(result.remediated()),
+            "objects_outstanding": len(backlog),
             "effective_loc": result.scanned_loc,
             "findings": len(result.findings),
-            "by_severity": result.count_by_severity(),
-            "by_rule": result.count_by_rule(),
-            "by_wave": result.count_by_wave(),
+            "outstanding_findings": sum(len(obj.findings) for obj in backlog),
+            "by_severity": count_by_severity(backlog),
+            "by_rule": count_by_rule(backlog),
+            "by_wave": count_by_wave(backlog),
         },
         "effort": EffortEstimate.from_objects(backlog).__dict__,
+        "cleared_effort": EffortEstimate.from_objects(result.remediated()).__dict__,
+        "remediated": [
+            {
+                "object_name": obj.object_name,
+                "path": obj.path,
+                "remediated_path": obj.remediated_path,
+                "wave": obj.wave,
+                "cleared_findings": len(obj.findings),
+            }
+            for obj in result.remediated()
+        ],
         "objects": [
             {
                 "object_name": obj.object_name,
@@ -98,10 +113,33 @@ def to_json(result: ScanResult) -> str:
     return json.dumps(payload, indent=2)
 
 
+def count_by_wave(objects: list[ObjectResult]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for obj in objects:
+        counts[obj.wave] = counts.get(obj.wave, 0) + len(obj.findings)
+    return dict(sorted(counts.items()))
+
+
+def count_by_severity(objects: list[ObjectResult]) -> dict[str, int]:
+    counts = {severity.value: 0 for severity in Severity}
+    for obj in objects:
+        for finding in obj.findings:
+            counts[finding.severity.value] += 1
+    return counts
+
+
+def count_by_rule(objects: list[ObjectResult]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for obj in objects:
+        for finding in obj.findings:
+            counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: -item[1]))
+
+
 def to_markdown(result: ScanResult) -> str:
     backlog = build_backlog(result)
     effort = EffortEstimate.from_objects(backlog)
-    severity_counts = result.count_by_severity()
+    severity_counts = count_by_severity(backlog)
 
     lines: list[str] = []
     lines.append("# Custom code remediation backlog")
@@ -113,14 +151,27 @@ def to_markdown(result: ScanResult) -> str:
         "object inventory."
     )
     lines.append("")
+    lines.append(
+        "Findings found and findings outstanding are different numbers: an "
+        "object with a `remediated_path` keeps its findings as cleared "
+        "evidence but leaves the backlog. Every breakdown below, and every "
+        "breakdown in the JSON, counts outstanding work only - the JSON key "
+        "that reconciles with them is `outstanding_findings`, not `findings`."
+    )
+    lines.append("")
     lines.append("## Summary")
     lines.append("")
     lines.append("| Metric | Value |")
     lines.append("| --- | --- |")
+    remediated = result.remediated()
+    cleared = EffortEstimate.from_objects(remediated)
+    outstanding_findings = sum(len(obj.findings) for obj in backlog)
+
     lines.append(f"| Objects scanned | {len(result.objects)} |")
-    lines.append(f"| Objects with findings | {len(backlog)} |")
+    lines.append(f"| Objects remediated | {len(remediated)} |")
+    lines.append(f"| Objects outstanding | {len(backlog)} |")
     lines.append(f"| Effective lines of code | {result.scanned_loc} |")
-    lines.append(f"| Findings | {len(result.findings)} |")
+    lines.append(f"| Findings outstanding | {outstanding_findings} |")
     for severity in Severity:
         lines.append(
             f"| Findings - {severity.value} | {severity_counts[severity.value]} |"
@@ -129,11 +180,31 @@ def to_markdown(result: ScanResult) -> str:
     lines.append(
         f"| Effort points incl. validation | {effort.weighted_points} |"
     )
-    lines.append(f"| Engineer-days | {effort.engineer_days} |")
+    lines.append(f"| Engineer-days outstanding | {effort.engineer_days} |")
     lines.append(
         f"| of which GxP validation overhead | {effort.validation_overhead_days} |"
     )
+    lines.append(f"| Engineer-days cleared | {cleared.engineer_days} |")
     lines.append("")
+
+    if remediated:
+        lines.append("## Remediated")
+        lines.append("")
+        lines.append(
+            "Objects with an S/4HANA implementation and ABAP Unit "
+            "evidence. The ECC source is retained as the before/after "
+            "pair for the validation package; its findings are excluded "
+            "from the backlog below."
+        )
+        lines.append("")
+        lines.append("| Object | Wave | S/4HANA implementation | Findings cleared |")
+        lines.append("| --- | --- | --- | --- |")
+        for obj in remediated:
+            lines.append(
+                f"| {obj.object_name} | {obj.wave} | `{obj.remediated_path}` | "
+                f"{len(obj.findings)} |"
+            )
+        lines.append("")
 
     lines.append("## Findings by wave")
     lines.append("")
@@ -153,7 +224,7 @@ def to_markdown(result: ScanResult) -> str:
     lines.append("")
     lines.append("| Rule | Title | Severity | Count |")
     lines.append("| --- | --- | --- | --- |")
-    for rule_id, count in result.count_by_rule().items():
+    for rule_id, count in count_by_rule(backlog).items():
         rule = _rule_for(result, rule_id)
         lines.append(f"| {rule_id} | {rule.title} | {rule.severity.value} | {count} |")
     lines.append("")
@@ -204,7 +275,7 @@ def to_markdown(result: ScanResult) -> str:
     lines.append("## Target patterns")
     lines.append("")
     seen: set[str] = set()
-    for finding in result.findings:
+    for finding in (f for obj in backlog for f in obj.findings):
         if finding.rule_id in seen:
             continue
         seen.add(finding.rule_id)

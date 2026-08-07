@@ -47,7 +47,10 @@ before any PR.
 - Any object you remediate must:
   1. scan clean (`s4scan scan <path> --fail-on minor`);
   2. ship an ABAP Unit test class named `<object>.testclasses.abap`;
-  3. keep its inventory row in `estate/inventory.csv` accurate.
+  3. keep its inventory row in `estate/inventory.csv` accurate, with
+     `remediated_path` pointing at the S/4HANA successor - that is what
+     takes the object out of the backlog;
+  4. regenerate the reports (`make scan-report`).
 - If a finding cannot be remediated, do not silence the rule. Record
   the deviation in the PR and leave the finding visible.
 

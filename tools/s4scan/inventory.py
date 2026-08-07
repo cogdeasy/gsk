@@ -39,6 +39,12 @@ class InventoryEntry:
     monthly_executions: int
     business_criticality: str
     validation_package: str
+    remediated_path: str = ""
+
+    @property
+    def is_remediated(self) -> bool:
+        """True once a remediated S/4HANA implementation exists."""
+        return bool(self.remediated_path)
 
     @property
     def validation_multiplier(self) -> float:
@@ -82,6 +88,7 @@ class Inventory:
                         monthly_executions=int(row["monthly_executions"]),
                         business_criticality=row["business_criticality"].strip(),
                         validation_package=row["validation_package"].strip(),
+                        remediated_path=(row.get("remediated_path") or "").strip(),
                     )
                 )
         return cls(entries)
