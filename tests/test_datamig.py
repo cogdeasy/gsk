@@ -1664,6 +1664,45 @@ def test_two_systems_supplying_one_batch_is_caught(result):
     assert "REC-STK-KEY" in {check.id for check in broken.failed_checks}
 
 
+def test_a_product_loaded_under_a_padded_number_is_caught(result):
+    """The count checks share the canonical key with the mapping.
+
+    Both derive their ECC side through `target_product`, which is what
+    mapping resolves the target through - deliberately, since a second
+    spelling of the key is how two of them drift apart, but it means a
+    defect inside the key moves both sides together and both stay
+    green. This check never asks what the number should be, only
+    whether what loaded is a legal S/4HANA product key.
+    """
+    from datamig import reconcile
+
+    padded = copy.deepcopy(result.product_result)
+    padded.products[0]["Product"] = padded.products[0]["Product"].rjust(18, "0")
+
+    broken = reconcile.build(
+        wave="wave0",
+        counts=result.reconciliation.counts,
+        accepted_open_items=result.cleansing["open_items"].accepted,
+        loaded_open_items=result.open_items,
+        accepted_stock=result.cleansing["batch_stock"].accepted,
+        loaded_stock=result.stock,
+        accepted_partners=len(result.cleansing["customers"].accepted)
+        + len(result.cleansing["vendors"].accepted),
+        partner_identities=len(result.business_partners.partners),
+        business_partners=len(result.business_partners.partners),
+        merged_partners=result.business_partners.merged_count,
+        xref=result.business_partners.xref,
+        products=padded,
+        accepted_materials=result.cleansing["materials"].accepted,
+    )
+
+    failed = {check.id for check in broken.failed_checks}
+    assert "REC-PRD-KEY" in failed
+    # The point of the check: the count checks it sits beside cannot
+    # see this, because both of their sides are keyed the same way.
+    assert "REC-CNT-materials" not in failed
+
+
 def test_a_number_reused_across_record_types_stays_two_partners():
     """A customer and a vendor can hold one number in one system.
 

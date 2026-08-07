@@ -215,6 +215,15 @@
       "note": ""
     },
     {
+      "id": "REC-PRD-KEY",
+      "description": "every product loads once, under an unpadded number",
+      "source_value": "22 product rows",
+      "target_value": "22 distinct bare numbers",
+      "status": "PASS",
+      "evidence": "asserted",
+      "note": ""
+    },
+    {
       "id": "REC-MRG-004",
       "description": "every harmonisation decision was applied or rejected",
       "source_value": "4 decisions",

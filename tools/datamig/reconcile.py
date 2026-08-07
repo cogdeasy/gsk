@@ -262,6 +262,41 @@ def _merge_checks(
             )
         )
 
+    if products is not None:
+        # Both count checks derive their ECC side through the canonical
+        # material key, the same one mapping resolves the target
+        # through. That is deliberate - a second spelling of the key is
+        # how two of them drift apart - but it bounds what those checks
+        # prove: a defect inside the key itself moves both sides
+        # together and they stay green. This one never asks what the
+        # number should be, only whether what loaded is a legal S/4HANA
+        # product key: unpadded, and one row per product. A material
+        # number that arrives at the load file still carrying its ECC
+        # padding is a different product from the one every other
+        # record refers to, and no count check would notice.
+        loaded = [row["Product"] for row in products.products]
+        padded = sorted({
+            number for number in loaded if len(number) > 1 and number.startswith("0")
+        })
+        repeated = sorted(
+            number for number, seen in Counter(loaded).items() if seen > 1
+        )
+        faults = [
+            f"{len(padded)} still padded: {_sample(padded)}" if padded else "",
+            f"{len(repeated)} loaded twice: {_sample(repeated)}" if repeated else "",
+        ]
+        checks.append(
+            Check(
+                evidence=ASSERTED,
+                id="REC-PRD-KEY",
+                description="every product loads once, under an unpadded number",
+                source_value=f"{len(loaded)} product rows",
+                target_value=f"{len(set(loaded) - set(padded))} distinct bare numbers",
+                passed=not padded and not repeated,
+                note="; ".join(fault for fault in faults if fault),
+            )
+        )
+
     if harmonisation is not None and products is not None:
         applied = {
             (system, material) for system, material in products.merged_materials

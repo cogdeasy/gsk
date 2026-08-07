@@ -246,10 +246,17 @@ def to_json(result: ScanResult) -> str:
 
 
 def count_by_wave(objects: list[ObjectResult]) -> dict[str, int]:
+    """Findings per wave, in delivery order.
+
+    Ordered by rank rather than by the spelling of the label, for the
+    reason every other wave ordering is: this feeds the JSON backlog,
+    which is read as a running order, and as text `wave10` comes before
+    `wave2`.
+    """
     counts: dict[str, int] = {}
     for obj in objects:
         counts[obj.wave] = counts.get(obj.wave, 0) + len(obj.findings)
-    return dict(sorted(counts.items()))
+    return {wave: counts[wave] for wave in sorted(counts, key=wave_rank)}
 
 
 def count_by_severity(objects: list[ObjectResult]) -> dict[str, int]:

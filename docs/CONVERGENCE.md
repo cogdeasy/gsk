@@ -225,6 +225,7 @@ outcome - which is also exactly what data loss looks like. So:
 | `REC-MRG-004` | every harmonisation decision was applied, or the material it names was rejected |
 | `REC-ARI-*` | the record-count table's own arithmetic: extracted - rejected - merged = loaded |
 | `REC-STK-KEY` | initial stock is unique on the real S/4HANA key, which has no source system column |
+| `REC-PRD-KEY` | every product loads once, under a bare number carrying none of ECC's padding |
 
 `REC-ARI-*` exists because the report prints that identity under the
 count table. Printed and unchecked, it is a claim about the load file
@@ -243,6 +244,17 @@ product and plant would balance every count and still load two rows
 S/4HANA cannot tell apart. Today the plants are disjoint, so the
 question does not arise - which is exactly why it needs a check rather
 than an assumption.
+
+`REC-PRD-KEY` covers the other side of the same blind spot. The two
+count checks derive their ECC side through the canonical material key,
+which is the same key the mapping resolves the target through - one
+spelling of it on purpose, because two spellings is how they drift
+apart, but it means a defect inside the key moves both sides together
+and both checks stay green. This one never asks what the number should
+be. It asks only whether what loaded is a legal S/4HANA product key:
+unpadded, and one row per product. A material that reaches the load
+file still padded to 18 is a different product from the one every
+other record refers to.
 
 The reconciliation report also breaks accepted records down by source
 system, so each side can see its own contribution to the merged total.
