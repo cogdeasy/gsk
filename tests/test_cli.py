@@ -84,11 +84,12 @@ def test_a_wave_view_prices_only_its_own_groups(capsys):
 
 
 def test_narrowing_a_wave_within_a_system_view_keeps_the_view(capsys):
-    """The two filters compose, and in either order.
+    """The two filters compose without an order to get wrong.
 
-    `--wave` narrows the estate and `--system` narrows the view of it,
-    so a wave applied after a system filter has to narrow both or the
-    system view would keep pricing groups from other waves.
+    `--wave` narrows the estate and `--system` narrows the view of it.
+    Applied together, the wave must still scope the groups and the
+    system must still leave them whole - a system view that dissolved
+    them would report no convergence at all.
     """
     s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0", "--system", "GVP"])
     filtered = capsys.readouterr().out

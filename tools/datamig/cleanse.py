@@ -22,6 +22,7 @@ from enum import Enum
 
 from .identity import (
     PartnerIdentity,
+    material_key,
     partner_identity,
     source_key,
     strip_leading_zeros,
@@ -120,6 +121,11 @@ class CleanseResult:
         return [issue for issue in self.issues if issue.rule_id == rule_id]
 
 
+def _row_key(row: dict[str, str]) -> tuple[str, str]:
+    """The key a harmonisation decision is matched on. See `identity`."""
+    return material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+
+
 def _issue(rule_id, action, object_name, key, field_name, message) -> Issue:
     return Issue(
         rule_id=rule_id,
@@ -140,9 +146,17 @@ def cleanse_materials(
     ``harmonisation_targets`` maps (source system, material) to the
     product number the material is to be merged into. It is needed here
     rather than only in mapping because a merge inherits the quality of
-    its target: if the surviving record is rejected, the record that was
-    to be retired has nowhere to land.
+    its target: if the surviving record is rejected, the record that
+    was to be retired has nowhere to land.
     """
+    # Re-keyed on `material_key` rather than trusting the caller to
+    # have done it. Whether a governed merge is applied must not depend
+    # on whether the number arrived padded: get that wrong and the
+    # decision silently does not happen.
+    harmonisation_targets = {
+        material_key(system, material): target
+        for (system, material), target in (harmonisation_targets or {}).items()
+    }
     result = CleanseResult(object_name="materials")
     descriptions: dict[str, list[str]] = defaultdict(list)
     numbers: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -255,11 +269,11 @@ def _reject_unit_mismatches(
     units = {
         strip_leading_zeros(row["MATNR"]): row["MEINS"]
         for row in result.accepted
-        if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+        if _row_key(row) not in harmonisation_targets
     }
 
     def mismatch(row: dict[str, str]) -> str | None:
-        target = harmonisation_targets.get((row["SOURCE_SYSTEM"], row["MATNR"]))
+        target = harmonisation_targets.get(_row_key(row))
         if target is None or target not in units:
             return None
         return None if units[target] == row["MEINS"] else target
@@ -268,7 +282,7 @@ def _reject_unit_mismatches(
     result.accepted[:] = [row for row in result.accepted if not mismatch(row)]
 
     for row in mismatched:
-        target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
+        target = harmonisation_targets[_row_key(row)]
         result.rejected.append(row)
         result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
             target_product=target,
@@ -305,7 +319,7 @@ def _reject_undecided_collisions(
     for number, rows in numbers.items():
         undecided = [
             row for row in rows
-            if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+            if _row_key(row) not in harmonisation_targets
         ]
         # Two rows landing on one product number, wherever they came
         # from. Requiring two systems would miss a number repeated
@@ -364,11 +378,11 @@ def _reject_orphaned_merges(
     surviving = {
         strip_leading_zeros(row["MATNR"])
         for row in result.accepted
-        if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+        if _row_key(row) not in harmonisation_targets
     }
 
     def is_orphaned(row: dict[str, str]) -> bool:
-        key = (row["SOURCE_SYSTEM"], row["MATNR"])
+        key = _row_key(row)
         return (
             key in harmonisation_targets
             and harmonisation_targets[key] not in surviving
@@ -390,7 +404,7 @@ def _reject_orphaned_merges(
     }
 
     for row in orphaned:
-        target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
+        target = harmonisation_targets[_row_key(row)]
         result.rejected.append(row)
         if target in retired:
             result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(

@@ -181,12 +181,45 @@ def test_duplicated_function_is_raised_against_both_implementations():
     }
     assert flagged
 
+    # Every member outstanding, not merely the group as a whole: the
+    # rule skips a member that is already rebuilt, so a group with one
+    # side built would fail this for the right reason and read as a
+    # bug. Picking on `is_remediated` alone passes only while the
+    # fully-outstanding group happens to sort first.
     group = next(
         group for group in result.convergence_groups()
-        if not group.is_remediated and not group.is_decommissioned
+        if len(group.outstanding) == len(group.objects)
     )
     for obj in group.objects:
         assert obj.object_name in flagged
+
+
+def test_a_view_filter_leaves_the_wave_it_was_taken_from_whole():
+    """The two filters have to land on different lists.
+
+    A wave narrows what is scanned; a system narrows what is shown of
+    it. Both were mutators once and only composed in one order, so
+    applying the view first set the estate to one system's objects and
+    dissolved every group. They are predicates now and `filter` orders
+    them itself - what is asserted here is the result: the view is one
+    system, the estate behind it is the whole wave.
+    """
+    result = scan(
+        [LEGACY],
+        inventory=load_inventory(),
+        test_roots=[REPO_ROOT / "abap"],
+    )
+    result.filter(
+        estate=lambda obj: obj.wave == "wave0",
+        view=lambda obj: obj.source_system == "GVP",
+    )
+
+    assert {obj.source_system for obj in result.objects} == {"GVP"}
+    assert {obj.source_system for obj in result.estate} == {"GEP", "GVP"}
+    assert {obj.wave for obj in result.estate} == {"wave0"}
+    # The groups survive the view, which is the whole point of keeping
+    # the estate: a group is cross-system by definition.
+    assert result.convergence_groups()
 
 
 def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():

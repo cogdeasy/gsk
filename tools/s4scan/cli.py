@@ -106,17 +106,16 @@ def _run_scan(args: argparse.Namespace) -> int:
 
     # A wave is a plan, and a group is planned as one piece of work, so
     # a group outside the wave is genuinely not this scan's business -
-    # narrow the estate itself. A system is not a plan: the same group
-    # spans both, so `--system` narrows only the view.
-    if args.wave:
-        result.narrow_estate(
-            [obj for obj in result.objects if obj.wave == args.wave]
-        )
-
-    if args.system:
-        result.restrict_to(
-            [obj for obj in result.objects if obj.source_system == args.system]
-        )
+    # it narrows the estate itself. A system is not a plan: the same
+    # group spans both, so `--system` narrows only the view.
+    result.filter(
+        estate=(lambda obj: obj.wave == args.wave) if args.wave else None,
+        view=(
+            (lambda obj: obj.source_system == args.system)
+            if args.system
+            else None
+        ),
+    )
 
     if args.format == "json":
         output = to_json(result)

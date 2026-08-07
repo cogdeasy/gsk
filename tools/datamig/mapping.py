@@ -22,6 +22,7 @@ from .cleanse import UOM_ISO
 from .extract import HarmonisationDecision
 from .identity import (
     PartnerIdentity,
+    material_key,
     partner_identity,
     source_key,
     strip_leading_zeros,
@@ -46,28 +47,34 @@ CUSTOMER_ROLES = ("FLCU00", "FLCU01")
 VENDOR_ROLES = ("FLVN00", "FLVN01")
 
 
+def _row_key(row: dict[str, str]) -> tuple[str, str]:
+    return material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+
+
 class ProductHarmonisation:
     """The governed decision about which materials become one product.
 
-    Keyed on (source system, material) because the two systems share
-    number ranges. A material with no decision keeps its own number.
+    Keyed on `material_key` - system qualified, because the two share
+    number ranges, and unpadded, because whether a governed merge
+    happens must not depend on how the steward typed the number. A
+    material with no decision keeps its own number.
     """
 
     def __init__(self, decisions: list[HarmonisationDecision]) -> None:
         self._merges = {
-            (decision.source_system, decision.material): decision
+            material_key(decision.source_system, decision.material): decision
             for decision in decisions
             if decision.decision == "merge"
         }
 
     def target_product(self, row: dict[str, str]) -> str:
-        decision = self._merges.get((row["SOURCE_SYSTEM"], row["MATNR"]))
+        decision = self._merges.get(_row_key(row))
         if decision:
             return decision.target_product
         return strip_leading_zeros(row["MATNR"])
 
     def is_merged(self, row: dict[str, str]) -> bool:
-        return (row["SOURCE_SYSTEM"], row["MATNR"]) in self._merges
+        return _row_key(row) in self._merges
 
     @property
     def merged_materials(self) -> set[tuple[str, str]]:
@@ -87,6 +94,9 @@ class ProductResult:
 
     products: list[dict[str, str]] = field(default_factory=list)
     xref: dict[str, str] = field(default_factory=dict)
+    #: `material_key` per merged record, so REC-MRG-004 can subtract
+    #: these from the decision table and be left with the decisions
+    #: that genuinely did not happen.
     merged_materials: list[tuple[str, str]] = field(default_factory=list)
 
     @property
@@ -122,7 +132,7 @@ def convert_to_products(
         result.xref[source_key(row, "MATNR")] = product
 
         if harmonisation.is_merged(row):
-            result.merged_materials.append((row["SOURCE_SYSTEM"], row["MATNR"]))
+            result.merged_materials.append(_row_key(row))
             continue
 
         # Cleansing holds back every undecided collision (DQ-MAT-009),

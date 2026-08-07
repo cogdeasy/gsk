@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from .inventory import SOURCE_SYSTEMS
+from .inventory import SOURCE_SYSTEMS, WAVE_ORDER, wave_rank
 from .rules import Severity
 from .scanner import ConvergenceGroup, ObjectResult, ScanResult
 
@@ -32,7 +32,7 @@ HOURS_PER_DAY = 7.5
 # business rules - before either can be built. Paid once per group.
 CONVERGENCE_DESIGN_POINTS = 13
 
-WAVE_ORDER = {"wave0": 0, "wave1": 1, "wave2": 2, "unassigned": 9}
+__all__ = ["WAVE_ORDER"]
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ class ConvergenceEstimate:
         converged = max(member_days) + design
         return cls(
             group_id=group.group_id,
-            wave=min(obj.wave for obj in outstanding),
+            wave=min((obj.wave for obj in outstanding), key=wave_rank),
             source_systems=tuple(sorted({obj.source_system for obj in outstanding})),
             independent_days=round(independent, 1),
             converged_days=round(converged, 1),
@@ -108,7 +108,7 @@ def priority_score(obj: ObjectResult) -> tuple:
     executions = obj.entry.monthly_executions if obj.entry else 0
     criticality = obj.entry.criticality_weight if obj.entry else 0
     return (
-        WAVE_ORDER.get(obj.wave, 9),
+        wave_rank(obj.wave),
         severity_rank,
         -criticality,
         -executions,
@@ -353,7 +353,7 @@ def to_markdown(result: ScanResult) -> str:
     lines.append("")
     lines.append("| Wave | Objects | Findings | Engineer-days |")
     lines.append("| --- | --- | --- | --- |")
-    for wave in sorted({obj.wave for obj in backlog}, key=lambda w: WAVE_ORDER.get(w, 9)):
+    for wave in sorted({obj.wave for obj in backlog}, key=wave_rank):
         wave_objects = [obj for obj in backlog if obj.wave == wave]
         wave_effort = EffortEstimate.from_objects(wave_objects)
         wave_findings = sum(len(obj.findings) for obj in wave_objects)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import cleanse, extract, load, mapping, reconcile
 from .cleanse import Action, CleanseResult
-from .identity import partner_identity, source_key
+from .identity import material_key, partner_identity, source_key
 from .reconcile import ObjectCounts, Reconciliation
 
 
@@ -154,9 +154,15 @@ def run(
             target_keys=_keys(result.products, "Product"),
             merged=products.merged_count,
         ),
+        # `loaded` is the count of rows that will be written, not of
+        # records that survived cleansing. For a customer that is the
+        # KNA1 side of the cross reference: partners are merged, so
+        # there is no one row per record to count, and taking it from
+        # `accepted` would make REC-ARI-customers restate its own
+        # source side and pass however many records mapping lost.
         ObjectCounts(
             "customers", customers.source_count, len(customers.rejected),
-            len(customers.accepted), _warnings(customers),
+            len(loaded_sources["KNA1"]), _warnings(customers),
             source_keys=frozenset(
                 source_key(row, "KUNNR") for row in customers.accepted
             ),
@@ -164,7 +170,7 @@ def run(
         ),
         ObjectCounts(
             "vendors", vendors.source_count, len(vendors.rejected),
-            len(vendors.accepted), _warnings(vendors),
+            len(loaded_sources["LFA1"]), _warnings(vendors),
             source_keys=frozenset(
                 source_key(row, "LIFNR") for row in vendors.accepted
             ),
@@ -230,8 +236,11 @@ def run(
         accepted_by_system=_accepted_by_system(result.cleansing),
         products=products,
         harmonisation=harmonisation,
+        # Same key the decisions are held under, or a decision written
+        # with an unpadded number would look unapplied rather than held.
         rejected_materials={
-            (row["SOURCE_SYSTEM"], row["MATNR"]) for row in materials.rejected
+            material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+            for row in materials.rejected
         },
         accepted_materials=materials.accepted,
         # Every number the extract knows about, accepted or not. A

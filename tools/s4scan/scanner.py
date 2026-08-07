@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import parser
-from .inventory import RETAIN, Inventory, InventoryEntry, is_a_duplication
+from .inventory import (
+    RETAIN,
+    Inventory,
+    InventoryEntry,
+    is_a_duplication,
+    wave_rank,
+)
 from .rules import OBJECT_RULES, RULES, Rule, RuleFilter, Severity
 
 ABAP_SUFFIXES = (".abap",)
 TEST_SUFFIX = ".testclasses.abap"
+
+Predicate = Callable[["ObjectResult"], bool]
 
 
 @dataclass(frozen=True)
@@ -158,7 +167,7 @@ class ConvergenceGroup:
     @property
     def wave(self) -> str:
         """The group lands in the earliest wave any member belongs to."""
-        return min(obj.wave for obj in self.objects)
+        return min((obj.wave for obj in self.objects), key=wave_rank)
 
     @property
     def validation_multiplier(self) -> float:
@@ -208,31 +217,36 @@ class ScanResult:
     def is_filtered(self) -> bool:
         return self.estate is not None
 
-    def restrict_to(self, objects: list[ObjectResult]) -> None:
-        """Narrow the view, remembering the estate it was taken from.
+    def filter(
+        self,
+        *,
+        estate: Predicate | None = None,
+        view: Predicate | None = None,
+    ) -> None:
+        """Apply the filters, in the only order that is correct.
 
-        For a filter that selects part of a convergence group - a
-        source system - so the group's economics stay whole.
+        The two kinds are not interchangeable. An `estate` filter -
+        a wave - selects whole convergence groups: work outside it is
+        genuinely not this scan's business and must not be priced into
+        it. A `view` filter - a source system - selects part of a
+        group, so the group has to stay whole underneath or its
+        economics dissolve: a group is cross-system by definition and
+        no group survives being grouped over one system's objects.
+
+        Both are taken as predicates and applied here rather than
+        exposed as two mutators, because the mutators only composed
+        correctly in one order: narrowing the estate after a view had
+        already been taken would have set the estate to one system's
+        objects and quietly dissolved every group. There is no order
+        to get wrong now.
         """
-        if self.estate is None:
-            self.estate = list(self.objects)
-        self.objects = objects
-
-    def narrow_estate(self, objects: list[ObjectResult]) -> None:
-        """Narrow what the scan is about, groups and all.
-
-        For a filter that selects whole convergence groups - a wave -
-        where work outside the selection genuinely is not this scan's
-        business and must not be priced into it.
-
-        Every filter must go through this or `restrict_to`. Assigning
-        `objects` directly is the trap: `convergence_groups()` falls
-        back to `objects` only while `estate` is None, so a new filter
-        written that way would dissolve every group without a word.
-        """
-        self.objects = objects
-        if self.estate is not None:
-            self.estate = objects
+        everything = self.estate if self.estate is not None else self.objects
+        scoped = [obj for obj in everything if estate is None or estate(obj)]
+        self.objects = [obj for obj in scoped if view is None or view(obj)]
+        # Only a view filter leaves an estate behind. A wave narrows
+        # what the scan is about, so what it excluded is not a part of
+        # the estate the report should still be reasoning about.
+        self.estate = scoped if view is not None else None
 
     @property
     def findings(self) -> list[Finding]:

@@ -235,6 +235,11 @@ def _merge_checks(
         # product does not exist in either system. The second is the
         # more dangerous, because holding the record back is exactly
         # what a legitimate hold looks like.
+        def _as_written(key: tuple[str, str]) -> str:
+            decision = harmonisation.decision_for(key)
+            material = decision.material if decision else key[1]
+            return f"{key[0]}/{material}"
+
         held: list[tuple[str, str]] = []
         stale: list[tuple[str, str]] = []
         invalid: list[tuple[str, str]] = []
@@ -247,7 +252,10 @@ def _merge_checks(
                 held.append(key)
 
         def _named(keys: list[tuple[str, str]]) -> str:
-            return ", ".join(f"{system}/{material}" for system, material in keys)
+            # The number as the decision table writes it, not the
+            # unpadded form the lookup uses: this note is a list of
+            # rows for a steward to go and correct.
+            return ", ".join(_as_written(key) for key in keys)
 
         notes = []
         if held:
@@ -258,8 +266,8 @@ def _merge_checks(
             notes.append(
                 "names a surviving product that is in neither system: "
                 + ", ".join(
-                    f"{system}/{material} -> {targets[(system, material)]}"
-                    for system, material in invalid
+                    f"{_as_written(key)} -> {targets[key]}"
+                    for key in invalid
                 )
             )
         checks.append(

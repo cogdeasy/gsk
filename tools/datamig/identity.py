@@ -33,6 +33,21 @@ def source_key(row: dict[str, str], key_field: str) -> str:
     return f"{row['SOURCE_SYSTEM']}/{row[key_field]}"
 
 
+def material_key(source_system: str, material: str) -> tuple[str, str]:
+    """The key a harmonisation decision is matched on.
+
+    Qualified with the system, because the two share number ranges, and
+    unpadded, because ECC writes MATNR padded to 18 and a steward
+    writing the number into the decision table does not. Matching on
+    the raw string would make a governed merge depend on how the
+    number was typed: the decision would silently not apply, the
+    duplicate would load under its own number with its stock, and
+    REC-MRG-004 would report it as naming a material that is not in
+    the extract - which is the one thing it is not.
+    """
+    return (source_system, strip_leading_zeros(material))
+
+
 def partner_identity(row: dict[str, str]) -> PartnerIdentity:
     """Name, country, postal code and VAT number, case normalised."""
     return (

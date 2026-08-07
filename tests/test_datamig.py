@@ -361,6 +361,68 @@ def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     assert not check.passed
 
 
+def test_a_decision_written_without_padding_is_still_applied():
+    """ECC pads MATNR to 18; a steward writing the table does not.
+
+    Whether a governed merge happens must not depend on that. It used
+    to: the decision silently did not apply, the duplicate loaded under
+    its own number with its stock, and REC-MRG-004 reported it as a
+    material that is not in the extract - which is the one thing it is
+    not.
+    """
+    decisions = [
+        extract.HarmonisationDecision(
+            source_system="GVP",
+            material="700301",
+            target_product="100251",
+            decision="merge",
+            note="Signed off",
+        )
+    ]
+    harmonisation = mapping.ProductHarmonisation(decisions)
+    retired = _material("GVP", "000000000000700301", "ADJUVANT WAVRE")
+
+    assert harmonisation.is_merged(retired)
+    assert harmonisation.target_product(retired) == "100251"
+
+    materials = cleanse.cleanse_materials(
+        [_material("GEP", "000000000000100251", "CORE ADJUVANT"), retired],
+        harmonisation_targets=harmonisation.targets,
+    )
+    assert materials.issues_for("DQ-MAT-010") == []
+    products = mapping.convert_to_products(materials.accepted, harmonisation)
+    assert [row["Product"] for row in products.products] == ["100251"]
+    assert products.merged_count == 1
+
+
+def test_a_padded_and_an_unpadded_decision_load_the_same_wave(tmp_path):
+    """End to end, because the padding has to agree at every stage."""
+    source = tmp_path / "wave0"
+    shutil.copytree(WAVE0, source)
+    table = source / extract.HARMONISATION_FILE
+    padded = pipeline.run(
+        wave="wave0", source_dir=source, out_dir=tmp_path / "padded"
+    )
+
+    table.write_text(
+        table.read_text(encoding="utf-8").replace(
+            "GVP,000000000000700302,", "GVP,700302,"
+        ),
+        encoding="utf-8",
+    )
+    unpadded = pipeline.run(
+        wave="wave0", source_dir=source, out_dir=tmp_path / "unpadded"
+    )
+
+    assert unpadded.reconciliation.passed
+    assert [row["Product"] for row in unpadded.products] == [
+        row["Product"] for row in padded.products
+    ]
+    assert unpadded.product_result.merged_count == (
+        padded.product_result.merged_count
+    )
+
+
 def test_a_reject_file_keeps_a_column_only_one_system_has(tmp_path):
     """Reject files mix both systems' rows into one evidence file.
 
@@ -944,6 +1006,36 @@ def test_the_printed_record_arithmetic_is_checked(result):
     )
     assert "REC-ARI-materials" in {check.id for check in broken.failed_checks}
     assert "REC-CNT-materials" not in {check.id for check in broken.failed_checks}
+
+
+def test_a_customer_lost_between_cleansing_and_load_breaks_the_arithmetic(
+    tmp_path,
+):
+    """The arithmetic has to read `loaded` off the rows being written.
+
+    Taking it from the accepted records instead makes the check restate
+    its own source side: extracted - rejected is the accepted count by
+    definition, so it would pass however many records mapping lost.
+    """
+    source = tmp_path / "wave0"
+    shutil.copytree(WAVE0, source)
+    outcome = pipeline.run(
+        wave="wave0", source_dir=source, out_dir=tmp_path / "out", write_files=False
+    )
+    customers = next(
+        count
+        for count in outcome.reconciliation.counts
+        if count.object_name == "customers"
+    )
+    assert customers.loaded == len(
+        [row for row in outcome.business_partners.xref_rows()
+         if row["SourceType"] == "KNA1"]
+    )
+
+    dropped = dataclasses.replace(customers, loaded=customers.loaded - 1)
+    assert (
+        dropped.extracted - dropped.rejected - dropped.merged != dropped.loaded
+    )
 
 
 def test_pipeline_writes_the_expected_artefacts(tmp_path):

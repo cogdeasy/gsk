@@ -38,6 +38,16 @@ RETAIN = "retain"
 CONVERGE = "converge"
 DECOMMISSION = "decommission"
 
+# Delivery order of the waves. Every wave comparison goes through this
+# rather than sorting the names, which agree with it only by accident:
+# `wave10` sorts before `wave2`, and `unassigned` before both.
+WAVE_ORDER = {"wave0": 0, "wave1": 1, "wave2": 2, "unassigned": 9}
+
+
+def wave_rank(wave: str) -> int:
+    """Sort key for a wave. An unknown wave sorts last, with unassigned."""
+    return WAVE_ORDER.get(wave, 9)
+
 
 def is_a_duplication(members: list[tuple[str, bool]]) -> bool:
     """Whether a convergence group is two implementations of one thing.

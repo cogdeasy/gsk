@@ -9,6 +9,7 @@ from pathlib import Path
 from . import pipeline, reconcile
 from .cleanse import Action
 from .extract import ExtractError
+from .mapping import MappingError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -108,7 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             out_dir=out_dir,
             write_files=not args.dry_run,
         )
-    except ExtractError as error:
+    # MappingError means cleansing let through something mapping had to
+    # refuse - unreachable while the two agree, and a traceback is the
+    # wrong way to tell an operator their wave stopped when it happens.
+    except (ExtractError, MappingError) as error:
         print(str(error), file=sys.stderr)
         return 2
 
