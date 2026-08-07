@@ -319,7 +319,8 @@ def to_markdown(result: ScanResult) -> str:
     lines.append(f"| Engineer-days cleared | {cleared.engineer_days} |")
     lines.append("")
 
-    lines.extend(_source_system_section(result, backlog))
+    if by_source_system(result):
+        lines.extend(_source_system_section(result, backlog))
     lines.extend(
         _convergence_section(convergence, groups_with_built_counterpart(result))
     )
@@ -440,6 +441,20 @@ def to_markdown(result: ScanResult) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def by_source_system(result: ScanResult) -> dict[str, list[ObjectResult]]:
+    """Only the real ECC systems.
+
+    Scanning a path outside the inventory - `abap/remediated`, say -
+    buckets its objects under "unassigned", which is not a system and
+    must not be rendered as one.
+    """
+    return {
+        system: objects
+        for system, objects in result.by_source_system().items()
+        if system in SOURCE_SYSTEMS
+    }
+
+
 def _source_system_section(
     result: ScanResult, backlog: list[ObjectResult]
 ) -> list[str]:
@@ -452,7 +467,7 @@ def _source_system_section(
     lines.append("| System | Description | Objects in estate | Outstanding | "
                  "Findings | Engineer-days |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
-    for system, objects in result.by_source_system().items():
+    for system, objects in by_source_system(result).items():
         outstanding = [obj for obj in backlog if obj.source_system == system]
         effort = EffortEstimate.from_objects(outstanding)
         findings = sum(len(obj.findings) for obj in outstanding)

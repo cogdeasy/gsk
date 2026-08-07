@@ -9,6 +9,7 @@ from pathlib import Path
 from .inventory import SOURCE_SYSTEMS, Inventory
 from .report import (
     build_backlog,
+    by_source_system,
     convergence_estimates,
     count_by_rule,
     count_by_severity,
@@ -153,11 +154,7 @@ def _summary(result) -> str:
     for severity, count in counts.items():
         lines.append(f"  {severity:<9}: {count}")
 
-    by_system = {
-        system: objects
-        for system, objects in result.by_source_system().items()
-        if system in SOURCE_SYSTEMS
-    }
+    by_system = by_source_system(result)
     if by_system:
         lines.append("")
         lines.append("source systems:")

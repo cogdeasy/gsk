@@ -73,7 +73,11 @@ before any PR.
    numbers - do not invent note numbers.
 2. Add a positive case to the parametrised test in
    `tests/test_rules.py`, and a negative case if the rule is prone to
-   false positives.
+   false positives. An object rule - one that fires on the object's
+   place in the estate rather than on a statement, like `SI-GXP-001`
+   and `SI-CONV-001` - has no statement to match, so it is tested in
+   `tests/test_scanner.py` against the inventory instead, and must
+   assert in `tests/test_rules.py` that it never matches a statement.
 3. Regenerate the reports: `make scan-report`.
 
 ### Adding a data quality or reconciliation rule
