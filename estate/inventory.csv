@@ -1,0 +1,17 @@
+object_name,object_type,path,module,owner,gxp_class,wave,monthly_executions,business_criticality,validation_package
+ZGSK_MM_STOCK_OVERVIEW,PROG,abap/src/mm/zgsk_mm_stock_overview.prog.abap,MM,GSC Supply Chain IT,gxp_relevant,wave0,14200,high,GSC-STK-001
+ZGSK_MM_BATCH_MOVEMENTS,PROG,abap/src/mm/zgsk_mm_batch_movements.prog.abap,MM,GSC Manufacturing IT,gxp_critical,wave0,8600,critical,GMP-BRE-007
+ZGSK_MM_ARIBA_PO_SYNC,PROG,abap/src/mm/zgsk_mm_ariba_po_sync.prog.abap,MM,Global Procurement IT,non_gxp,wave1,31000,high,N/A
+ZGSK_MM_SERIALISATION_RECON,PROG,abap/src/mm/zgsk_mm_serialisation_recon.prog.abap,MM,GSC Serialisation Programme,gxp_critical,wave0,2400,critical,SER-FMD-003
+ZGSK_FI_ICT_MARGIN,PROG,abap/src/fi/zgsk_fi_ict_margin.prog.abap,FI,Global Financial Services,non_gxp,wave0,320,critical,N/A
+ZGSK_FI_AP_AGEING,PROG,abap/src/fi/zgsk_fi_ap_ageing.prog.abap,FI,Global Financial Services,non_gxp,wave1,1800,medium,N/A
+ZGSK_SD_ORDER_VARIANTS,PROG,abap/src/sd/zgsk_sd_order_variants.prog.abap,SD,Commercial IT,non_gxp,wave1,140,medium,N/A
+ZGSK_SD_CREDIT_CHECK,PROG,abap/src/sd/zgsk_sd_credit_check.prog.abap,SD,Commercial IT,non_gxp,wave1,5200,high,N/A
+ZGSK_MD_CUSTOMER_SYNC,PROG,abap/src/md/zgsk_md_customer_sync.prog.abap,MDM,Enterprise Data & Analytics,gxp_relevant,wave0,930,critical,MDM-CVI-002
+ZGSK_QM_BATCH_RELEASE,PROG,abap/src/qm/zgsk_qm_batch_release.prog.abap,QM,Global Quality IT,gxp_critical,wave0,4100,critical,QMS-014
+ZGSK_PP_MRP_EXCEPTIONS,PROG,abap/src/pp/zgsk_pp_mrp_exceptions.prog.abap,PP,GSC Planning IT,non_gxp,wave1,6700,medium,N/A
+ZGSK_CO_PRODUCT_COST,PROG,abap/src/co/zgsk_co_product_cost.prog.abap,CO,Global Financial Services,non_gxp,wave2,410,medium,N/A
+ZGSK_IF_LABEL_PRINT,FUGR,abap/src/if/zgsk_if_label_print.fugr.abap,SD,GSC Manufacturing IT,gxp_critical,wave0,268000,critical,LBL-ANX11-001
+ZGSK_IF_MES_CONFIRMATION,PROG,abap/src/if/zgsk_if_mes_confirmation.prog.abap,PP,GSC Manufacturing IT,gxp_critical,wave0,54000,critical,GMP-BRE-011
+ZGSK_COMMON_UTILS,INCL,abap/src/common/zgsk_common_utils.incl.abap,BASIS,ERP Competency Centre,gxp_relevant,wave0,0,high,N/A
+ZXVEDU01_SALES_ORDER,EXIT,abap/src/exits/zxvedu01_sales_order.exit.abap,SD,Commercial IT,gxp_relevant,wave1,412000,critical,SD-CTRL-005

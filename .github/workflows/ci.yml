@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    name: Lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check tools tests
+
+      - name: Tests
+        run: python -m pytest
+
+  readiness:
+    name: Custom code readiness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -e "."
+
+      - name: Regenerate the remediation backlog
+        run: |
+          s4scan scan abap/src --format markdown --out reports/remediation-backlog.md
+          s4scan scan abap/src --format json --out reports/remediation-backlog.json
+
+      - name: Fail if the committed backlog is stale
+        run: git diff --exit-code reports/
+
+      - name: Estate summary
+        run: s4scan scan abap/src
+
+      - name: Remediated reference must stay clean
+        run: s4scan scan abap/remediated --fail-on minor
+
+  wave_load:
+    name: Wave 0 data migration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -e "."
+
+      - name: Run the wave 0 pipeline
+        run: datamig run --wave wave0 --out reports/wave0
+
+      - name: Fail if the committed reconciliation is stale
+        run: git diff --exit-code reports/wave0

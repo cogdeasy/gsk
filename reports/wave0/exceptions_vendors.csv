@@ -1,0 +1,8 @@
+rule_id,action,object,key,field,message
+DQ-VEN-006,warn,vendors,0000510016,ZZ_GMP_AUDITED,"supplier has no GMP audit flag, confirm before cutover"
+DQ-VEN-006,warn,vendors,0000510018,ZZ_GMP_AUDITED,"supplier has no GMP audit flag, confirm before cutover"
+DQ-VEN-002,reject,vendors,0000510023,NAME1,"name or country missing, cannot create a business partner"
+DQ-VEN-004,warn,vendors,0000510023,PSTLZ,"postal code missing, address will not be validated"
+DQ-VEN-006,warn,vendors,0000510023,ZZ_GMP_AUDITED,"supplier has no GMP audit flag, confirm before cutover"
+DQ-VEN-006,warn,vendors,0000510025,ZZ_GMP_AUDITED,"supplier has no GMP audit flag, confirm before cutover"
+DQ-VEN-007,warn,vendors,"0000510012, 0000510020",NAME1,records merge into one business partner: LONZA AG
