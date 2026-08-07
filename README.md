@@ -25,7 +25,8 @@ repository models:
 | Data migration engineering | `data/wave0` (ECC extracts), `tools/datamig` (extract, cleanse, map, load, reconcile), `reports/wave0/reconciliation.md` |
 | Test and validation evidence | `abap/remediated/*.testclasses.abap`, rule `SI-GXP-001`, `docs/VALIDATION.md` |
 
-See `docs/PROGRAMME.md` for the programme context and
+See `docs/PROGRAMME.md` for the programme context,
+`docs/WAVE0-PLAN.md` for the wave 0 plan and backlog tracker, and
 `docs/DEMO.md` for how to drive the repository in a walkthrough.
 
 ## Quick start
