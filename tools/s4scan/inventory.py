@@ -43,7 +43,7 @@ DECOMMISSION = "decommission"
 UNSCHEDULED_RANK = 10**6
 
 
-def wave_rank(wave: str) -> int:
+def wave_rank(wave: str) -> tuple[int, str]:
     """Delivery order of a wave. Anything unscheduled sorts last.
 
     Every wave comparison goes through this rather than sorting the
@@ -53,11 +53,16 @@ def wave_rank(wave: str) -> int:
     looked up, so a wave the programme adds is ordered the day it
     appears - enumerating them meant `wave3` arriving ranked equal to
     `unassigned` and tie-broken by object name.
+
+    The name breaks the tie, which is why this is a key and not an
+    integer: two unscheduled labels rank the same, and the reports are
+    committed, so a tie left to be settled by set iteration order is a
+    diff that appears and disappears between runs.
     """
     number = wave.removeprefix("wave")
     if wave.startswith("wave") and number.isdigit():
-        return int(number)
-    return UNSCHEDULED_RANK
+        return (int(number), wave)
+    return (UNSCHEDULED_RANK, wave)
 
 
 def is_a_duplication(members: list[tuple[str, bool]]) -> bool:

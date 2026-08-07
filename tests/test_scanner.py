@@ -104,7 +104,13 @@ def test_a_wave_the_programme_adds_is_ordered_the_day_it_appears():
     """
     assert wave_rank("wave2") < wave_rank("wave3") < wave_rank("wave10")
     assert wave_rank("wave10") < wave_rank("unassigned")
-    assert wave_rank("cutover") == wave_rank("unassigned")
+    # Two unscheduled labels are equally unscheduled, and the reports
+    # are committed: a tie settled by set iteration order is a diff
+    # that comes and goes between runs.
+    assert wave_rank("cutover") < wave_rank("unassigned")
+    assert sorted({"unassigned", "cutover", "wave10", "wave2"}, key=wave_rank) == [
+        "wave2", "wave10", "cutover", "unassigned",
+    ]
 
 
 def test_a_group_with_nothing_left_to_build_has_no_estimate():
