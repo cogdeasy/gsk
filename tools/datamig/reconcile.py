@@ -472,6 +472,13 @@ def build(
         target_value = target_totals.get(key, Decimal(0))
         reconciliation.checks.append(
             Check(
+                # `map_open_item` copies DMBTR, BUKRS and WAERS across
+                # untouched, one row per accepted item, so the two
+                # totals are the same addition performed twice. Real
+                # value evidence is a control total produced by the
+                # source system and signed off before the extract runs,
+                # which is outside this repository.
+                evidence=INVARIANT,
                 id=f"REC-FI-VAL-{key[0]}-{key[1]}",
                 description=f"open item value total {key[0]} {key[1]}",
                 source_value=f"{source_value:.2f}",
@@ -506,6 +513,12 @@ def build(
         target_value = target_stock.get(key, Decimal(0))
         reconciliation.checks.append(
             Check(
+                # As with the value totals: `map_stock` copies CLABS
+                # and WERKS across untouched, so nothing in the data
+                # can separate the two sides. It also sums KG and ST
+                # into one plant figure, so it would not see a unit
+                # error even if it could fail.
+                evidence=INVARIANT,
                 id=f"REC-STK-{key[0]}",
                 description=f"unrestricted stock quantity in plant {key[0]}",
                 source_value=f"{source_value:.3f}",

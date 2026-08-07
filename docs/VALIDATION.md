@@ -64,9 +64,16 @@ itself is broken, which is worth knowing but is not evidence about the
 load. All of the record arithmetic is an invariant, because every
 mapping emits one row per accepted record or stops - partners
 included, where each accepted record is appended to its business
-partner unconditionally. The count checks beside it compare key sets
-and are the ones that fail on real data. An assessor should read the
-column, not the pass count.
+partner unconditionally. So are the value and quantity totals: mapping
+copies the amount, the company code and the plant across untouched, so
+the two sides are the same addition performed twice. The count checks
+compare key sets and are the ones that fail on real data. An assessor
+should read the column, not the pass count.
+
+What no check in this pack does is prove that the extract was
+complete. That needs a control total produced by the source system and
+signed off before extraction, which is the programme's to obtain -
+here there is nothing upstream of the CSV to compare against.
 
 A wave cannot be signed off with a failing check. Warnings are allowed
 but must be explained in the cutover log - for wave 0 the open ones are

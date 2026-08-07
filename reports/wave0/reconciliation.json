@@ -229,7 +229,7 @@
       "source_value": "6448000.00",
       "target_value": "6448000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -238,7 +238,7 @@
       "source_value": "18072000.00",
       "target_value": "18072000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -247,7 +247,7 @@
       "source_value": "2884000.00",
       "target_value": "2884000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -256,7 +256,7 @@
       "source_value": "5801101.50",
       "target_value": "5801101.50",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -265,7 +265,7 @@
       "source_value": "1224000.00",
       "target_value": "1224000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -274,7 +274,7 @@
       "source_value": "13990000.00",
       "target_value": "13990000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -337,7 +337,7 @@
       "source_value": "962000.000",
       "target_value": "962000.000",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -346,7 +346,7 @@
       "source_value": "1495000.000",
       "target_value": "1495000.000",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -355,7 +355,7 @@
       "source_value": "19800.000",
       "target_value": "19800.000",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -364,7 +364,7 @@
       "source_value": "304230.500",
       "target_value": "304230.500",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -373,7 +373,7 @@
       "source_value": "123000.000",
       "target_value": "123000.000",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -382,7 +382,7 @@
       "source_value": "33000.000",
       "target_value": "33000.000",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {

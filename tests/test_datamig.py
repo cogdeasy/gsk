@@ -1353,6 +1353,18 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
         for check in result.reconciliation.checks
         if check.id.startswith("REC-ARI-")
     )
+    # Mapping copies the amount, the company code and the plant across
+    # untouched, so a value total is the same addition done twice. It
+    # reads like the strongest check in the pack and is the weakest.
+    totals = [
+        check
+        for check in result.reconciliation.checks
+        if check.description.startswith(
+            ("open item value total", "unrestricted stock quantity")
+        )
+    ]
+    assert totals
+    assert all(check.evidence == reconcile.INVARIANT for check in totals)
     assert evidence["REC-MRG-002"] == reconcile.INVARIANT
     # Goes and looks at the load file for the surviving product.
     assert evidence["REC-MRG-003"] == reconcile.COMPARED
