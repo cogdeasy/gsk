@@ -38,15 +38,26 @@ RETAIN = "retain"
 CONVERGE = "converge"
 DECOMMISSION = "decommission"
 
-# Delivery order of the waves. Every wave comparison goes through this
-# rather than sorting the names, which agree with it only by accident:
-# `wave10` sorts before `wave2`, and `unassigned` before both.
-WAVE_ORDER = {"wave0": 0, "wave1": 1, "wave2": 2, "unassigned": 9}
+# Sorts after any numbered wave. Not a wave number itself: an object
+# nobody has scheduled is the end of the backlog, not wave 999.
+UNSCHEDULED_RANK = 10**6
 
 
 def wave_rank(wave: str) -> int:
-    """Sort key for a wave. An unknown wave sorts last, with unassigned."""
-    return WAVE_ORDER.get(wave, 9)
+    """Delivery order of a wave. Anything unscheduled sorts last.
+
+    Every wave comparison goes through this rather than sorting the
+    names, which agree with it only up to `wave9`: as text `wave10`
+    sorts before `wave2`, which in the table a programme sequences
+    builds from puts later work first. The number is read rather than
+    looked up, so a wave the programme adds is ordered the day it
+    appears - enumerating them meant `wave3` arriving ranked equal to
+    `unassigned` and tie-broken by object name.
+    """
+    number = wave.removeprefix("wave")
+    if wave.startswith("wave") and number.isdigit():
+        return int(number)
+    return UNSCHEDULED_RANK
 
 
 def is_a_duplication(members: list[tuple[str, bool]]) -> bool:
@@ -214,7 +225,7 @@ class Inventory:
         return self._by_name.get(object_name.upper())
 
     def waves(self) -> list[str]:
-        return sorted({entry.wave for entry in self._entries})
+        return sorted({entry.wave for entry in self._entries}, key=wave_rank)
 
     def source_systems(self) -> list[str]:
         return sorted({entry.source_system for entry in self._entries})

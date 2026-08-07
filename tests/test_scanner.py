@@ -94,6 +94,19 @@ def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
     ))
 
 
+def test_a_wave_the_programme_adds_is_ordered_the_day_it_appears():
+    """The rank is read off the number, not looked up in a list.
+
+    Enumerating the waves ranked every unlisted one equal, so the test
+    above passed on `wave10` being unknown rather than on it being
+    tenth - and a real `wave3` would have sorted with `unassigned` and
+    been tie-broken by object name.
+    """
+    assert wave_rank("wave2") < wave_rank("wave3") < wave_rank("wave10")
+    assert wave_rank("wave10") < wave_rank("unassigned")
+    assert wave_rank("cutover") == wave_rank("unassigned")
+
+
 def test_a_group_with_nothing_left_to_build_has_no_estimate():
     """`max()` over no members says nothing about which group broke."""
     result = legacy_scan()

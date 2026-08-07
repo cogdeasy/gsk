@@ -136,12 +136,20 @@ KNA1 and LFA1 are keyed on the number, so ECC cannot produce it and
 the extract itself is wrong. `DQ-CUS-009` and `DQ-VEN-009` hold both
 records, because one source key cannot carry two companies and the
 loser's open items would post against the winner's business partner.
-Their open items are held with them under `DQ-FI-004`, which names the
-rule holding the partner. That applies to any held partner, not only a
-collision - a customer rejected for an invalid country code is equally
-present in the extract, and telling a steward the master is missing
-sends them after a record that is sitting in front of them. `DQ-FI-002`
-is left meaning what it says: the partner is not in the extract at all.
+Whether the two rows disagree is beside the point - two rows carrying
+the same company are the same broken extract, and harder to see,
+because they read as one record until a count comes up short.
+
+Their open items are held with them under `DQ-FI-004`, which names
+every rule holding the partner. That applies to any held partner, not
+only a collision - a customer rejected for an invalid country code is
+equally present in the extract, and telling a steward the master is
+missing sends them after a record that is sitting in front of them.
+Where more than one rule holds the record they are all named: clearing
+the country code leaves the collision, and a steward told only about
+the country code comes back to a document that still does not post.
+`DQ-FI-002` is left meaning what it says: the partner is not in the
+extract at all.
 
 **Partners merge on the legal entity.** UNICEF Supply Division is a
 customer in both systems under different numbers; it becomes one

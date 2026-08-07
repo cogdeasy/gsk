@@ -251,6 +251,47 @@ def test_a_record_already_rejected_is_not_held_a_second_time():
     assert outcome.source_count == 2
 
 
+def test_an_open_item_is_told_every_rule_holding_its_partner():
+    """Clearing one hold leaves the record held by the other.
+
+    Naming whichever rule fired last sends the steward back a second
+    time for a problem that was on the screen the first: the country
+    code is repaired, the partner still does not load, and the document
+    still does not post.
+    """
+    def customer(number: str, country: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": number, "NAME1": "NHS SUPPLY CHAIN",
+            "LAND1": country, "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    partners = cleanse.cleanse_partners(
+        [customer("0000210045", "XX"), customer("0000210045", "GB")],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    held = cleanse.held_partner_refs(partners, "C")
+    assert held == {"GEP/C/0000210045": ("DQ-CUS-003", "DQ-CUS-009")}
+
+    outcome = cleanse.cleanse_open_items(
+        [{
+            "SOURCE_SYSTEM": "GEP", "BUKRS": "GB01", "BELNR": "1900000001",
+            "GJAHR": "2026", "BUZEI": "001", "BLART": "RV", "HKONT": "140000",
+            "PARTNER": "0000210045", "PARTNER_TYPE": "C", "SHKZG": shkzg,
+            "DMBTR": "100.00", "WAERS": "GBP", "BUDAT": "20260615",
+            "ZFBDT": "20260715",
+        } for shkzg in ("S", "H")],
+        set(),
+        held,
+    )
+    message = outcome.issues_for("DQ-FI-004")[0].message
+    assert "DQ-CUS-003, DQ-CUS-009" in message
+    assert "once those are resolved" in message
+
+
 def test_the_same_record_listed_twice_is_held_like_any_other_duplicate():
     """Identical details make it harder to spot, not less broken.
 
@@ -345,7 +386,7 @@ def test_an_open_item_behind_a_held_partner_is_not_sent_looking_for_it():
         key_field="KUNNR",
     )
     held = cleanse.held_partner_refs(partners, "C")
-    assert held == {"GEP/C/0000210045": "DQ-CUS-009"}
+    assert held == {"GEP/C/0000210045": ("DQ-CUS-009",)}
 
     outcome = cleanse.cleanse_open_items(
         [line("001", "S"), line("002", "H")], set(), held

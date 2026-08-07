@@ -739,8 +739,10 @@ def cleanse_partners(
     return result
 
 
-def held_partner_refs(result: CleanseResult, partner_type: str) -> dict[str, str]:
-    """Partner references cleansing held back, and the rule that held them.
+def held_partner_refs(
+    result: CleanseResult, partner_type: str
+) -> dict[str, tuple[str, ...]]:
+    """Partner references cleansing held back, and the rules holding them.
 
     Every reject, not only the duplicate-number holds: what matters to
     whoever works the exception is whether the record is in the
@@ -750,19 +752,29 @@ def held_partner_refs(result: CleanseResult, partner_type: str) -> dict[str, str
     side. Naming the rule that holds the partner puts the work where it
     can be done: on the country code, or on the collision, whichever it
     was.
+
+    All of them where a record is held by more than one rule, in the
+    order they fired. Clearing one leaves the record held by the other,
+    so naming a single rule sends the steward back a second time for a
+    problem that was visible the first.
     """
-    return {
-        partner_ref(system, partner_type, number): issue.rule_id
-        for issue in result.issues
-        if issue.action is Action.REJECT
-        for system, number in (split_source_key(key) for key in issue.keys)
-    }
+    rules: dict[str, tuple[str, ...]] = {}
+    for issue in result.issues:
+        if issue.action is not Action.REJECT:
+            continue
+        for key in issue.keys:
+            system, number = split_source_key(key)
+            reference = partner_ref(system, partner_type, number)
+            held = rules.get(reference, ())
+            if issue.rule_id not in held:
+                rules[reference] = held + (issue.rule_id,)
+    return rules
 
 
 def cleanse_open_items(
     rows: list[dict[str, str]],
     known_partners: set[str],
-    held_partners: dict[str, str] | None = None,
+    held_partners: dict[str, tuple[str, ...]] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="open_items")
     held = held_partners or {}
@@ -815,12 +827,13 @@ def cleanse_open_items(
                     f"{PARTNER_ACCOUNTS[partner_type]} " if partner_type in PARTNER_TYPES
                     else f"account type '{partner_type}' "
                 )
-                rule = held.get(reference)
-                if rule is not None:
+                rules = held.get(reference)
+                if rules:
                     result.issues.append(
                         _issue("DQ-FI-004", Action.REJECT, "open_items", key, "PARTNER",
                                f"{account}{partner} is held back from the load "
-                               f"by {rule}; this document posts once that is "
+                               f"by {', '.join(rules)}; this document posts "
+                               f"once {'that is' if len(rules) == 1 else 'those are'} "
                                "resolved")
                     )
                 else:
