@@ -50,8 +50,9 @@ def test_remediation_moves_findings_from_outstanding_to_cleared():
     payload = json.loads(report.to_json(result))
     summary = payload["summary"]
 
+    cleared = [obj for obj in result.remediated() if obj.findings]
     assert summary["outstanding_findings"] < summary["findings"]
-    assert summary["objects_outstanding"] + summary["objects_remediated"] == (
+    assert summary["objects_outstanding"] + len(cleared) == (
         summary["objects_with_findings"]
     )
     assert payload["cleared_effort"]["engineer_days"] > 0

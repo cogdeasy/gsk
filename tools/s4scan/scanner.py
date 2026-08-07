@@ -106,24 +106,6 @@ class ScanResult:
     def scanned_loc(self) -> int:
         return sum(obj.loc for obj in self.objects)
 
-    def count_by_severity(self) -> dict[str, int]:
-        counts = {severity.value: 0 for severity in Severity}
-        for finding in self.findings:
-            counts[finding.severity.value] += 1
-        return counts
-
-    def count_by_rule(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for finding in self.findings:
-            counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
-        return dict(sorted(counts.items(), key=lambda item: -item[1]))
-
-    def count_by_wave(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for obj in self.objects:
-            counts[obj.wave] = counts.get(obj.wave, 0) + len(obj.findings)
-        return dict(sorted(counts.items()))
-
     def objects_with_findings(self) -> list[ObjectResult]:
         return [obj for obj in self.objects if obj.findings]
 

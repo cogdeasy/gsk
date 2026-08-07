@@ -88,7 +88,7 @@ class Inventory:
                         monthly_executions=int(row["monthly_executions"]),
                         business_criticality=row["business_criticality"].strip(),
                         validation_package=row["validation_package"].strip(),
-                        remediated_path=row.get("remediated_path", "").strip(),
+                        remediated_path=(row.get("remediated_path") or "").strip(),
                     )
                 )
         return cls(entries)
