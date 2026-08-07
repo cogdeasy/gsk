@@ -215,6 +215,11 @@ class ScanResult:
     # What the estate contains, as opposed to what was scanned. Only
     # the inventory knows that, and SI-CONV-001 is raised from it.
     inventory: Inventory | None = None
+    # Everything the scan found, kept so that filtering is always
+    # computed from the whole of it rather than from the last result.
+    _scanned: list[ObjectResult] | None = field(default=None, repr=False)
+    _estate_filters: list[Predicate] = field(default_factory=list, repr=False)
+    _view_filters: list[Predicate] = field(default_factory=list, repr=False)
 
     @property
     def is_filtered(self) -> bool:
@@ -226,7 +231,7 @@ class ScanResult:
         estate: Predicate | None = None,
         view: Predicate | None = None,
     ) -> None:
-        """Apply the filters, in the only order that is correct.
+        """Narrow the scan, by any number of calls in any order.
 
         The two kinds are not interchangeable. An `estate` filter -
         a wave - selects whole convergence groups: work outside it is
@@ -236,20 +241,33 @@ class ScanResult:
         economics dissolve: a group is cross-system by definition and
         no group survives being grouped over one system's objects.
 
-        Both are taken as predicates and applied here rather than
-        exposed as two mutators, because the mutators only composed
-        correctly in one order: narrowing the estate after a view had
-        already been taken would have set the estate to one system's
-        objects and quietly dissolved every group. There is no order
-        to get wrong now.
+        Every call recomputes both lists from everything the scan
+        found, accumulating the predicates. Reading the current lists
+        instead is the trap: a second call would take its estate from
+        an already narrowed view, so applying a wave after a system
+        would set the estate to one system's objects and quietly
+        dissolve every group. Nothing here depends on being called
+        once, or in a particular order.
         """
-        everything = self.estate if self.estate is not None else self.objects
-        scoped = [obj for obj in everything if estate is None or estate(obj)]
-        self.objects = [obj for obj in scoped if view is None or view(obj)]
+        if self._scanned is None:
+            self._scanned = list(self.objects)
+        if estate is not None:
+            self._estate_filters.append(estate)
+        if view is not None:
+            self._view_filters.append(view)
+
+        scoped = [
+            obj
+            for obj in self._scanned
+            if all(keep(obj) for keep in self._estate_filters)
+        ]
+        self.objects = [
+            obj for obj in scoped if all(keep(obj) for keep in self._view_filters)
+        ]
         # Only a view filter leaves an estate behind. A wave narrows
         # what the scan is about, so what it excluded is not a part of
         # the estate the report should still be reasoning about.
-        self.estate = scoped if view is not None else None
+        self.estate = scoped if self._view_filters else None
 
     @property
     def findings(self) -> list[Finding]:

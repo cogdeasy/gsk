@@ -269,6 +269,44 @@ def test_a_view_filter_leaves_the_wave_it_was_taken_from_whole():
     assert result.groups_extend_beyond_view()
 
 
+def test_filtering_twice_gives_what_filtering_once_gives():
+    """Nothing may depend on `filter` being called exactly once.
+
+    The composition it replaced was correct only in one order. Reading
+    the current lists rather than the whole scan would bring that back
+    silently: the wave applied second would take its estate from the
+    system view and leave every convergence group dissolved.
+    """
+    def scanned() -> object:
+        return scan(
+            [LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"]
+        )
+
+    def wave(obj) -> bool:
+        return obj.wave == "wave0"
+
+    def system(obj) -> bool:
+        return obj.source_system == "GVP"
+
+    once = scanned()
+    once.filter(estate=wave, view=system)
+
+    for first, second in (({"estate": wave}, {"view": system}),
+                          ({"view": system}, {"estate": wave})):
+        twice = scanned()
+        twice.filter(**first)
+        twice.filter(**second)
+        assert [obj.path for obj in twice.objects] == [
+            obj.path for obj in once.objects
+        ]
+        assert [obj.path for obj in twice.estate] == [
+            obj.path for obj in once.estate
+        ]
+        assert {group.group_id for group in twice.convergence_groups()} == {
+            group.group_id for group in once.convergence_groups()
+        }
+
+
 def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
     """The caveat is about groups, not about being filtered.
 
