@@ -38,6 +38,25 @@ RETAIN = "retain"
 CONVERGE = "converge"
 DECOMMISSION = "decommission"
 
+# What every row must carry. `convergence_group`, `disposition` and
+# `remediated_path` are not here: an object that converges with nothing,
+# is retained and has no successor yet is a real inventory row, and
+# defaulting them is how the estate is described before the programme
+# has ruled on it.
+REQUIRED_COLUMNS = (
+    "object_name",
+    "source_system",
+    "object_type",
+    "path",
+    "module",
+    "owner",
+    "gxp_class",
+    "wave",
+    "monthly_executions",
+    "business_criticality",
+    "validation_package",
+)
+
 # Sorts after any numbered wave. Not a wave number itself: an object
 # nobody has scheduled is the end of the backlog, not wave 999.
 UNSCHEDULED_RANK = 10**6
@@ -165,7 +184,23 @@ class Inventory:
     def load(cls, path: str | Path) -> Inventory:
         entries: list[InventoryEntry] = []
         with open(path, newline="", encoding="utf-8") as handle:
-            for row in csv.DictReader(handle):
+            reader = csv.DictReader(handle)
+            # The CLI turns InventoryError into a message and an exit
+            # code, so a missing column reaching whoever edited the
+            # inventory as a bare KeyError is the traceback that
+            # handler exists to prevent. The optional columns are the
+            # ones with a defensible default; these have none.
+            missing = [
+                column
+                for column in REQUIRED_COLUMNS
+                if column not in (reader.fieldnames or [])
+            ]
+            if missing:
+                raise InventoryError(
+                    f"{path}: inventory has no {', '.join(missing)} "
+                    f"column; it needs {', '.join(REQUIRED_COLUMNS)}"
+                )
+            for row in reader:
                 entries.append(
                     InventoryEntry(
                         object_name=row["object_name"].strip(),

@@ -66,6 +66,30 @@ def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
         Inventory.load(split)
 
 
+def test_an_inventory_missing_a_column_says_which(tmp_path):
+    """A column dropped by an edit is an edit to explain, not a crash.
+
+    The CLI turns `InventoryError` into a message and an exit code; a
+    `KeyError` on the first row goes past it as a traceback naming a
+    dictionary key, which is not what the person who edited the file
+    is looking at.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    dropped = rows[0].split(",").index("source_system")
+    stripped = tmp_path / "inventory.csv"
+    stripped.write_text(
+        "\n".join(
+            ",".join(cell for index, cell in enumerate(row.split(","))
+                     if index != dropped)
+            for row in rows
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(InventoryError, match="no source_system column"):
+        Inventory.load(stripped)
+
+
 def test_a_group_switched_off_on_one_side_only_is_refused(tmp_path):
     """One member decommissioned and one kept leaves no group at all.
 

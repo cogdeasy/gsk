@@ -42,6 +42,12 @@ def summary(capsys, *args: str) -> str:
     if argv not in _SUMMARY:
         assert s4scan_cli.main(list(argv)) == 0
         _SUMMARY[argv] = capsys.readouterr().out
+    else:
+        # Drained on the way out either way. A cached call that left the
+        # buffer alone would make a later `readouterr()` in the same
+        # test return whatever the run before it printed, and only for
+        # the tests that happen not to be first.
+        capsys.readouterr()
     return _SUMMARY[argv]
 
 
