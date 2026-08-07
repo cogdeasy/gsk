@@ -97,8 +97,21 @@ def read_csv(path: str | Path, name: str, source_system: str) -> Dataset:
 
     rows: list[dict[str, str]] = []
     with open(file_path, newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
+        for number, row in enumerate(csv.DictReader(handle), start=2):
             record = {key: (value or "").strip() for key, value in row.items()}
+            # An extract that names its own system is checked against
+            # the folder it arrived in rather than relabelled by it. The
+            # two disagreeing means a file is in the wrong place, and
+            # the whole pipeline keys on the answer: silently taking the
+            # folder's word for it migrates one system's records under
+            # the other's name.
+            stated = record.get(SYSTEM_FIELD, "")
+            if stated and stated != source_system:
+                raise ExtractError(
+                    f"{file_path} line {number}: extracted from {stated} but "
+                    f"read as {source_system}; the file is in the wrong "
+                    "system's folder or the column is wrong"
+                )
             record[SYSTEM_FIELD] = source_system
             rows.append(record)
 

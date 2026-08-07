@@ -1132,6 +1132,24 @@ def test_an_extract_must_declare_its_source_system(tmp_path):
         extract.read_csv(path, "materials", "")
 
 
+def test_an_extract_that_names_another_system_is_refused(tmp_path):
+    """The folder is the source of truth, so it must not be the only one.
+
+    An extract dropped into the wrong system's folder would otherwise
+    be relabelled on read, and every stage keys on the answer: GVP's
+    records would migrate as GEP's, under GEP's numbers.
+    """
+    path = tmp_path / "ecc_mara_material_master.csv"
+    path.write_text(
+        "SOURCE_SYSTEM,MATNR\nGVP,000000000000100001\n", encoding="utf-8"
+    )
+    with pytest.raises(extract.ExtractError, match="extracted from GVP"):
+        extract.read_csv(path, "materials", "GEP")
+
+    # And an extract naming the folder it is in reads as itself.
+    assert extract.read_csv(path, "materials", "GVP").rows[0]["SOURCE_SYSTEM"] == "GVP"
+
+
 def test_reconciliation_counts_each_source_system(result):
     by_system = result.reconciliation.accepted_by_system
     assert set(result.reconciliation.source_systems) == {"GEP", "GVP"}

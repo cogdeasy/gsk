@@ -331,7 +331,10 @@ class ScanResult:
                 if group.is_cross_system
                 and any(obj.path in visible for obj in group.objects)
             ),
-            key=lambda group: (group.wave, group.group_id),
+            # Delivery order, not alphabetical: `wave10` sorts before
+            # `wave2` as text, and the table is read as a running
+            # order.
+            key=lambda group: (wave_rank(group.wave), group.group_id),
         )
 
     def groups_extend_beyond_view(self) -> bool:

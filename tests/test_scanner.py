@@ -37,6 +37,34 @@ def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
         Inventory.load(split)
 
 
+def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
+    """`wave10` sorts before `wave2` as text and after it as a wave.
+
+    The convergence table is a running order, so a group sorted by the
+    spelling of its wave puts later work above earlier work and the
+    table stops meaning what it is read as meaning.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    for group_id, wave in (("CG-MM-STOCK", "wave10"), ("CG-QM-RELEASE", "wave2")):
+        for index, row in enumerate(rows):
+            if f",{group_id}," in row:
+                rows[index] = ",".join(
+                    wave if part.startswith("wave") else part
+                    for part in row.split(",")
+                )
+    moved = tmp_path / "inventory.csv"
+    moved.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    result = scan(
+        [LEGACY], inventory=Inventory.load(moved), test_roots=[REPO_ROOT / "abap"]
+    )
+    order = [group.group_id for group in result.convergence_groups()]
+    assert order.index("CG-QM-RELEASE") < order.index("CG-MM-STOCK")
+    assert order == sorted(order, key=lambda gid: wave_rank(
+        next(g.wave for g in result.convergence_groups() if g.group_id == gid)
+    ))
+
+
 def test_a_counterpart_being_switched_off_is_not_a_duplication(tmp_path):
     """Nothing to converge with, so SI-CONV-001 must not fire.
 
