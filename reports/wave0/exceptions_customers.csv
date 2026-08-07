@@ -5,9 +5,9 @@ DQ-CUS-003,reject,customers,GEP/0000210060,LAND1,'XX' is not a valid ISO country
 DQ-CUS-004,warn,customers,GVP/0000210116,PSTLZ,"postal code missing, address will not be validated"
 DQ-CUS-002,reject,customers,GVP/0000210119,NAME1,"name or country missing, cannot create a business partner"
 DQ-CUS-005,warn,customers,GVP/0000210119,STCEG,VAT registration missing for an EU/UK partner
+DQ-CUS-008,warn,customers,"GEP/0000210045, GVP/0000210045",KUNNR,number 210045 exists in both source systems as different entities (GEP/0000210045 NHS SUPPLY CHAIN; GVP/0000210045 INSTITUT PASTEUR DE DAKAR); it must not be reused as the business partner number
 DQ-CUS-007,warn,customers,"GEP/0000210046, GEP/0000210058",NAME1,records merge into one business partner within GEP: ALLIANCE HEALTHCARE UK
 DQ-CUS-007,warn,customers,"GEP/0000210049, GVP/0000210116",NAME1,records merge into one business partner across both source systems: CENTRAL MEDICAL STORES TANZANIA
 DQ-CUS-007,warn,customers,"GEP/0000210050, GVP/0000210112",NAME1,records merge into one business partner across both source systems: UNICEF SUPPLY DIVISION
 DQ-CUS-007,warn,customers,"GEP/0000210051, GVP/0000210113",NAME1,records merge into one business partner across both source systems: PAHO REVOLVING FUND
 DQ-CUS-007,warn,customers,"GEP/0000210053, GVP/0000210117",NAME1,records merge into one business partner across both source systems: ZUELLIG PHARMA SINGAPORE
-DQ-CUS-008,warn,customers,"GEP/0000210045, GVP/0000210045",KUNNR,number 210045 exists in both source systems as different entities (GEP/0000210045 NHS SUPPLY CHAIN; GVP/0000210045 INSTITUT PASTEUR DE DAKAR); it must not be reused as the business partner number

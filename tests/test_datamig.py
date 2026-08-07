@@ -251,6 +251,39 @@ def test_a_record_already_rejected_is_not_held_a_second_time():
     assert outcome.source_count == 2
 
 
+def test_a_merge_is_not_announced_for_records_the_collision_holds():
+    """One side held is no merge; both sides held is nothing at all.
+
+    The warning is read as work: confirm the two records really are
+    one company. Neither is loading, so there is nothing to confirm
+    and no business partner for them to become.
+    """
+    def customer(number: str, name: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": number, "NAME1": name,
+            "LAND1": "GB", "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [
+            # Same number, two companies: both held.
+            customer("0000210045", "NHS SUPPLY CHAIN"),
+            customer("0000210045", "BOOTS UK LTD"),
+            # The held record's company again, under a sound number -
+            # the merge it would have joined loses a side.
+            customer("0000210058", "NHS SUPPLY CHAIN"),
+        ],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    assert outcome.issues_for("DQ-CUS-009")
+    assert outcome.issues_for("DQ-CUS-007") == []
+    assert [row["KUNNR"] for row in outcome.accepted] == ["0000210058"]
+
+
 def test_an_open_item_behind_a_held_partner_is_not_sent_looking_for_it():
     """The master was read and withheld, not missed.
 

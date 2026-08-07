@@ -137,9 +137,11 @@ the extract itself is wrong. `DQ-CUS-009` and `DQ-VEN-009` hold both
 records, because one source key cannot carry two companies and the
 loser's open items would post against the winner's business partner.
 Their open items are held with them under `DQ-FI-004`, which names the
-rule holding the partner: the master is absent by decision, and telling
-a steward it is missing sends them after a record that is sitting in
-the extract.
+rule holding the partner. That applies to any held partner, not only a
+collision - a customer rejected for an invalid country code is equally
+present in the extract, and telling a steward the master is missing
+sends them after a record that is sitting in front of them. `DQ-FI-002`
+is left meaning what it says: the partner is not in the extract at all.
 
 **Partners merge on the legal entity.** UNICEF Supply Division is a
 customer in both systems under different numbers; it becomes one

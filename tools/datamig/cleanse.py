@@ -644,21 +644,6 @@ def cleanse_partners(
             result.rejected.append(row)
         else:
             result.accepted.append(row)
-            seen[partner_identity(row)].append(key)
-
-    for identity, keys in seen.items():
-        if len(keys) > 1:
-            systems = {key.split("/", 1)[0] for key in keys}
-            scope = (
-                "across both source systems" if len(systems) > 1
-                else f"within {next(iter(systems))}"
-            )
-            result.issues.append(
-                _issue(f"{prefix}-007", Action.WARN, object_name, keys,
-                       "NAME1",
-                       f"records merge into one business partner {scope}: "
-                       f"{identity[0]}")
-            )
 
     # The two systems share number ranges. Where the same number holds
     # different entities the merge must key on the entity, not the
@@ -716,17 +701,41 @@ def cleanse_partners(
                 row for row in result.accepted if id(row) not in held
             ]
 
+    # Last, over what survived. A merge is a statement about the records
+    # that reach the target, so a warning naming one the collision rule
+    # has just held describes a merge that will not happen - and with
+    # one side gone there may be nothing left to merge at all.
+    for row in result.accepted:
+        seen[partner_identity(row)].append(source_key(row, key_field))
+
+    for identity, keys in seen.items():
+        if len(keys) > 1:
+            systems = {key.split("/", 1)[0] for key in keys}
+            scope = (
+                "across both source systems" if len(systems) > 1
+                else f"within {next(iter(systems))}"
+            )
+            result.issues.append(
+                _issue(f"{prefix}-007", Action.WARN, object_name, keys,
+                       "NAME1",
+                       f"records merge into one business partner {scope}: "
+                       f"{identity[0]}")
+            )
+
     return result
 
 
 def held_partner_refs(result: CleanseResult, partner_type: str) -> dict[str, str]:
     """Partner references cleansing held back, and the rule that held them.
 
-    An open item naming one of these is not naming a partner the
-    extract forgot. The record was read and deliberately withheld, so
-    `DQ-FI-002`'s instruction - go and find the master - is work that
-    cannot be done, and the same misdiagnosis `DQ-STK-006` exists to
-    prevent on the stock side.
+    Every reject, not only the duplicate-number holds: what matters to
+    whoever works the exception is whether the record is in the
+    extract, and for all of these it is. `DQ-FI-002`'s instruction - go
+    and find the master - is then the one thing that cannot be done,
+    the same misdiagnosis `DQ-STK-006` exists to prevent on the stock
+    side. Naming the rule that holds the partner puts the work where it
+    can be done: on the country code, or on the collision, whichever it
+    was.
     """
     return {
         partner_ref(system, partner_type, number): issue.rule_id

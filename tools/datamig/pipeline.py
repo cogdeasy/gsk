@@ -134,8 +134,11 @@ def run(
     result.open_items = [
         mapping.map_open_item(row, partners.xref) for row in open_items.accepted
     ]
+    # Bound once: `lookup` builds the table from the cross reference on
+    # every read, and inside the comprehension that is once per batch.
+    product_lookup = products.lookup
     result.stock = [
-        mapping.map_stock(row, accepted_materials, products.lookup)
+        mapping.map_stock(row, accepted_materials, product_lookup)
         for row in batch_stock.accepted
     ]
 
