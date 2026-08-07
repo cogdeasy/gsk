@@ -172,15 +172,19 @@ def _merge_checks(
 
     checks.append(
         Check(
+            # Counting the merges off the cross reference rather than
+            # off the mapping's own tally is what lets a record written
+            # under two BPs be seen at all, but it does not make this
+            # arithmetic evidence: mapping appends one cross-reference
+            # entry per accepted record, so the merge count and the BP
+            # count come out of the same rows the left side counts.
+            # What the number is for is reading - how much of the
+            # shortfall the merge accounts for - not proving.
+            evidence=INVARIANT,
             id="REC-MRG-001",
             description=(
                 "partner records minus merges equals business partners"
             ),
-            # ``accepted_partners`` is counted on the ECC side, after
-            # cleansing. ``merged_partners`` and ``business_partners``
-            # are both read off the files that will be loaded, so a
-            # record lost, duplicated or invented between the two
-            # breaks the equality.
             source_value=f"{accepted_partners} records - {merged_partners} merged",
             target_value=f"{business_partners} BPs",
             passed=accepted_partners - merged_partners == business_partners,
@@ -409,6 +413,13 @@ def build(
 
     reconciliation.checks.append(
         Check(
+            # Both sides count `partner_identity` over the accepted
+            # records - the pipeline directly, mapping through the
+            # index it deduplicates on. Two spellings of one company
+            # are invisible to it, because the identity is what decides
+            # both sides; that is a question for the golden-source
+            # rule, not something this check could ever catch.
+            evidence=INVARIANT,
             id="REC-BP-001",
             description="one business partner per distinct legal entity",
             source_value=f"{partner_identities} identities in {accepted_partners} records",

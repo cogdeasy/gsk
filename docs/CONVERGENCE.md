@@ -204,6 +204,12 @@ outcome - which is also exactly what data loss looks like. So:
 count table. Printed and unchecked, it is a claim about the load file
 rather than evidence about it.
 
+Of those, only `REC-MRG-003` and `REC-MRG-004` go and look at the load
+file for something a decision named. The rest derive both sides from
+the accepted records through the same mapping, so they catch the
+tooling breaking and nothing else; the report labels them `invariant`
+and the evidence column is the thing to read, not the pass count.
+
 `REC-STK-KEY` exists because every count check keys stock by source
 system, which is the right ECC-side key and not a column the target
 has. Two systems supplying the same batch on the same harmonised

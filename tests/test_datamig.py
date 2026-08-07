@@ -1366,6 +1366,11 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
     assert totals
     assert all(check.evidence == reconcile.INVARIANT for check in totals)
     assert evidence["REC-MRG-002"] == reconcile.INVARIANT
+    # Both count the same accepted records through the same identity
+    # function, one directly and one through the index mapping
+    # deduplicates on.
+    assert evidence["REC-MRG-001"] == reconcile.INVARIANT
+    assert evidence["REC-BP-001"] == reconcile.INVARIANT
     # Goes and looks at the load file for the surviving product.
     assert evidence["REC-MRG-003"] == reconcile.COMPARED
     # Both sides off the load file, held against a rule the target must

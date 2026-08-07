@@ -46,10 +46,10 @@ Both ECC systems load into one S/4HANA client. These are the records each contri
 | REC-ARI-open_items | open_items: extracted - rejected - merged equals the load file | 42 - 6 - 0 = 36 | 36 rows loaded | invariant | PASS |  |
 | REC-CNT-batch_stock | batch_stock: every accepted record loaded once | 21 accepted keys | 21 keys in the load file | compared | PASS |  |
 | REC-ARI-batch_stock | batch_stock: extracted - rejected - merged equals the load file | 32 - 11 - 0 = 21 | 21 rows loaded | invariant | PASS |  |
-| REC-BP-001 | one business partner per distinct legal entity | 33 identities in 43 records | 33 BPs in the load file | compared | PASS | 10 records merged into a shared BP |
+| REC-BP-001 | one business partner per distinct legal entity | 33 identities in 43 records | 33 BPs in the load file | invariant | PASS | 10 records merged into a shared BP |
 | REC-BP-002 | every loaded open item partner resolves to a BP | 18 | 18 | asserted | PASS |  |
 | REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | compared | PASS |  |
-| REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | compared | PASS | 7 BPs are held in both source systems |
+| REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | invariant | PASS | 7 BPs are held in both source systems |
 | REC-MRG-002 | material records minus harmonisations equals products | 25 materials - 3 harmonised | 22 products | invariant | PASS | 6 rejected before mapping |
 | REC-MRG-003 | every harmonised material resolves to a loaded product | 3 survivors named by decisions | 3 in the load file | compared | PASS |  |
 | REC-MRG-004 | every harmonisation decision was applied or rejected | 4 decisions | 3 applied, 1 rejected | compared | PASS | held back by cleansing: GVP/000000000000700301 |

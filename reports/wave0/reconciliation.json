@@ -166,7 +166,7 @@
       "source_value": "33 identities in 43 records",
       "target_value": "33 BPs in the load file",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": "10 records merged into a shared BP"
     },
     {
@@ -193,7 +193,7 @@
       "source_value": "43 records - 10 merged",
       "target_value": "33 BPs",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": "7 BPs are held in both source systems"
     },
     {
