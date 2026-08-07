@@ -518,6 +518,13 @@ def _reject_orphaned_merges(
     # Numbers the collision rule is already holding. It ran first, so a
     # survivor it took out is missing for a reason the steward can act
     # on, and one it cannot reach by correcting the master.
+    #
+    # The system is dropped on purpose, and this is the one place in the
+    # module that drops it: the survivor is named by bare product
+    # number, which is what S/4HANA keys on, so a collision on that
+    # number in *either* extract means the product does not reach the
+    # load. Everywhere a record is identified rather than a target, the
+    # key stays qualified.
     collided = {hold.split("/", 1)[1] for hold in result.collision_holds}
 
     for row in orphaned:
