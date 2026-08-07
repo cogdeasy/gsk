@@ -144,7 +144,7 @@ The merge is where two sources become one client:
 
 ```
 object         extracted  rejected  merged  loaded   warn
-materials             31         6       3      22      6
+materials             31         6       3      22      2
 customers             25         2       0      23      9
 vendors               21         1       0      20     11
 open_items            42         6       0      36      1

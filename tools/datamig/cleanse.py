@@ -158,7 +158,7 @@ def cleanse_materials(
         for (system, material), target in (harmonisation_targets or {}).items()
     }
     result = CleanseResult(object_name="materials")
-    descriptions: dict[str, list[str]] = defaultdict(list)
+    descriptions: dict[str, list[dict[str, str]]] = defaultdict(list)
     numbers: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
@@ -213,7 +213,7 @@ def cleanse_materials(
             )
             row["MAKTX"] = row["MAKTX"].upper()
 
-        descriptions[row["MAKTX"]].append(key)
+        descriptions[row["MAKTX"]].append(row)
         # Keyed on the number the material would load under, not the
         # one it was extracted with: the target product number is the
         # bare MATNR, so 100801 and 000000000000100801 are the same
@@ -232,13 +232,24 @@ def cleanse_materials(
         else:
             result.accepted.append(row)
 
-    for description, keys in descriptions.items():
-        if len(keys) > 1:
-            systems = {key.split("/")[0] for key in keys}
+    for description, duplicates in descriptions.items():
+        # A pair the data council has already ruled on is not an
+        # exception. Asking a steward to confirm a decision that exists
+        # is how an evidence pack fills up with items nobody can close,
+        # and the decision is the confirmation. Counted the same way as
+        # DQ-MAT-009: one record left undecided means the rest are
+        # being merged into it, and there is nothing outstanding.
+        undecided = [
+            row for row in duplicates
+            if _row_key(row) not in harmonisation_targets
+        ]
+        if len(undecided) > 1:
+            systems = {row["SOURCE_SYSTEM"] for row in undecided}
             scope = (
                 "in both source systems" if len(systems) > 1
                 else f"within {next(iter(systems))}"
             )
+            keys = [source_key(row, "MATNR") for row in undecided]
             result.issues.append(
                 _issue("DQ-MAT-008", Action.WARN, "materials", ", ".join(keys),
                        "MAKTX",
@@ -603,22 +614,22 @@ def cleanse_batch_stock(
     for row in rows:
         key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
         reject = False
-        material_key = source_key(row, "MATNR")
-        material = materials.get(material_key)
+        stock_material = source_key(row, "MATNR")
+        material = materials.get(stock_material)
 
-        if material is None and material_key in holds:
+        if material is None and stock_material in holds:
             # Naming the missing master would send a steward looking
             # for a record that was deliberately retired. The work is
             # on the surviving product, or on the decision itself.
             reject = True
-            hold = holds[material_key]
+            hold = holds[stock_material]
             result.issues.append(
                 _issue("DQ-STK-006", Action.REJECT, "batch_stock", key, "MATNR",
                        f"material was harmonised into product "
                        f"{hold.target_product}, {hold.reason} ({hold.rule}); "
                        "this stock loads once that is resolved")
             )
-        elif material is None and material_key in collisions:
+        elif material is None and stock_material in collisions:
             # Same reasoning as DQ-STK-006: the master is absent by
             # decision, not by accident, and the steward has nothing to
             # do here until the collision is settled.

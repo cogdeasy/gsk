@@ -135,8 +135,10 @@ the merge crosses systems, before the load runs.
 materials are the same product has a regulatory consequence, so it is
 not inferred from matching descriptions. The pipeline reads
 `data/wave0/material_harmonisation.csv`, the data council's decision,
-and applies exactly that. Descriptions that match without a decision
-are raised as `DQ-MAT-008` for a steward to look at.
+and applies exactly that. Descriptions that match *without* a decision
+are raised as `DQ-MAT-008` for a steward to look at; where a decision
+covers them, the decision is the confirmation and nothing is raised.
+An exception list that repeats settled questions is one nobody reads.
 
 **A shared material number without a decision is a reject, not a
 warning.** Partners are merged on the legal entity, so a reused

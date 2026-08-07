@@ -138,6 +138,17 @@ def _validate_harmonisation(
     """
     seen: set[tuple[str, str]] = set()
     for decision in decisions:
+        # A system that does not exist matches no extracted material, so
+        # the merge would not happen and REC-MRG-004 would report the
+        # material as absent from the extract - sending a steward to
+        # look for a record that is present, over a typo in a column
+        # with two legal values.
+        if decision.source_system not in SOURCE_SYSTEMS:
+            raise ExtractError(
+                f"{file_path}: {decision.source_system}/{decision.material} "
+                f"names source system '{decision.source_system}'; "
+                f"use one of {', '.join(sorted(SOURCE_SYSTEMS))}"
+            )
         if decision.decision not in HARMONISATION_DECISIONS:
             raise ExtractError(
                 f"{file_path}: {decision.source_system}/{decision.material} "

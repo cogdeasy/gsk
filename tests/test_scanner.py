@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from s4scan import report
-from s4scan.inventory import Inventory, InventoryError, is_a_duplication
+from s4scan.inventory import Inventory, InventoryError, is_a_duplication, wave_rank
 from s4scan.rules import RuleFilter, Severity
 from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
 
@@ -365,7 +365,7 @@ def test_backlog_is_ordered_by_wave_then_severity():
     result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
     backlog = report.build_backlog(result)
     waves = [obj.wave for obj in backlog]
-    assert waves == sorted(waves, key=lambda wave: report.WAVE_ORDER[wave])
+    assert waves == sorted(waves, key=wave_rank)
     assert backlog[0].wave == "wave0"
 
 

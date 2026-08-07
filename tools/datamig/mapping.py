@@ -66,11 +66,21 @@ class ProductHarmonisation:
             for decision in decisions
             if decision.decision == "merge"
         }
+        # Both sides of the decision are unpadded, not just the material
+        # it applies to. The surviving product is compared against
+        # numbers that have been through `strip_leading_zeros` at every
+        # point that consumes it, so a target written the way ECC prints
+        # it would name a product that exists nowhere - and the steward
+        # would be sent to correct a surviving master that is fine.
+        self._targets = {
+            key: strip_leading_zeros(decision.target_product)
+            for key, decision in self._merges.items()
+        }
 
     def target_product(self, row: dict[str, str]) -> str:
-        decision = self._merges.get(_row_key(row))
-        if decision:
-            return decision.target_product
+        key = _row_key(row)
+        if key in self._targets:
+            return self._targets[key]
         return strip_leading_zeros(row["MATNR"])
 
     def is_merged(self, row: dict[str, str]) -> bool:
@@ -82,7 +92,7 @@ class ProductHarmonisation:
 
     @property
     def targets(self) -> dict[tuple[str, str], str]:
-        return {key: decision.target_product for key, decision in self._merges.items()}
+        return dict(self._targets)
 
     def decision_for(self, key: tuple[str, str]) -> HarmonisationDecision | None:
         return self._merges.get(key)

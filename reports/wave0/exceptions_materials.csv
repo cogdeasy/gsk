@@ -6,10 +6,6 @@ DQ-MAT-005,warn,materials,GEP/000000000000100243,BRGEW,"gross weight is missing,
 DQ-MAT-004,reject,materials,GEP/000000000000100251,GEWEI,gross weight supplied without a weight unit
 DQ-MAT-001,fix,materials,GVP/000000000000700304,MEINS,base unit 'kg' upper-cased
 DQ-MAT-006,reject,materials,GVP/000000000000700308,MHDHB,batch managed material without total shelf life (GMP)
-DQ-MAT-008,warn,materials,"GEP/000000000000100236, GVP/000000000000700302",MAKTX,"duplicate material description 'SHINGRIX SUSPENSION 1 DOSE VIAL' in both source systems, confirm the harmonisation decision"
-DQ-MAT-008,warn,materials,"GEP/000000000000100244, GVP/000000000000700310",MAKTX,"duplicate material description 'RSV VACCINE INVESTIGATIONAL VIAL' in both source systems, confirm the harmonisation decision"
 DQ-MAT-008,warn,materials,"GEP/000000000000100247, GEP/000000000000100248",MAKTX,"duplicate material description 'SENSODYNE REPAIR PROTECT 75ML' within GEP, confirm the harmonisation decision"
-DQ-MAT-008,warn,materials,"GEP/000000000000100250, GVP/000000000000700303",MAKTX,"duplicate material description 'CERVARIX SUSPENSION 0.5ML VIAL' in both source systems, confirm the harmonisation decision"
-DQ-MAT-008,warn,materials,"GEP/000000000000100251, GVP/000000000000700301",MAKTX,"duplicate material description 'SHINGRIX ANTIGEN BULK' in both source systems, confirm the harmonisation decision"
 DQ-MAT-009,reject,materials,"GEP/000000000000100249, GVP/000000000000100249",MATNR,material number 100249 is used in both source systems for different products and no harmonisation decision nominates a survivor; the target product number cannot be carried over from either
 DQ-MAT-010,reject,materials,GVP/000000000000700301,MATNR,"harmonised into product 100251, which is not itself in the load; correct the surviving master or revisit the harmonisation decision"

@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from .inventory import SOURCE_SYSTEMS, WAVE_ORDER, wave_rank
+from .inventory import SOURCE_SYSTEMS, wave_rank
 from .rules import Severity
 from .scanner import ConvergenceGroup, ObjectResult, ScanResult
 
@@ -31,8 +31,6 @@ HOURS_PER_DAY = 7.5
 # the same function - fit-gap, target design, agreeing one set of
 # business rules - before either can be built. Paid once per group.
 CONVERGENCE_DESIGN_POINTS = 13
-
-__all__ = ["WAVE_ORDER"]
 
 
 @dataclass(frozen=True)

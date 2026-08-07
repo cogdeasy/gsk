@@ -395,6 +395,76 @@ def test_a_decision_written_without_padding_is_still_applied():
     assert products.merged_count == 1
 
 
+def test_a_decision_whose_survivor_is_padded_is_still_applied():
+    """The other side of the same defect, and the worse one.
+
+    An unpadded material meant the merge quietly did not happen. A
+    padded survivor means the merge is actively refused: nothing
+    matches the target, so the retired record is held under
+    DQ-MAT-010, its stock follows under DQ-STK-006 and REC-MRG-004
+    fails the wave - all of it blaming a surviving master that is
+    perfectly fine.
+    """
+    decisions = [
+        extract.HarmonisationDecision(
+            source_system="GVP",
+            material="000000000000700301",
+            target_product="000000000000100251",
+            decision="merge",
+            note="Signed off",
+        )
+    ]
+    harmonisation = mapping.ProductHarmonisation(decisions)
+    retired = _material("GVP", "000000000000700301", "ADJUVANT WAVRE")
+
+    assert harmonisation.target_product(retired) == "100251"
+
+    materials = cleanse.cleanse_materials(
+        [_material("GEP", "000000000000100251", "CORE ADJUVANT"), retired],
+        harmonisation_targets=harmonisation.targets,
+    )
+    assert materials.issues_for("DQ-MAT-010") == []
+    products = mapping.convert_to_products(materials.accepted, harmonisation)
+    assert [row["Product"] for row in products.products] == ["100251"]
+
+
+def test_a_decided_duplicate_description_is_not_raised_as_an_exception():
+    """DQ-MAT-008 asks a steward to confirm a harmonisation decision.
+
+    Where the decision exists, there is nothing to confirm, and an
+    exception nobody can close is how an evidence pack stops being
+    read.
+    """
+    rows = [
+        _material("GEP", "000000000000100236", "INFLUENZA VACCINE"),
+        _material("GVP", "000000000000700302", "INFLUENZA VACCINE"),
+    ]
+    assert cleanse.cleanse_materials(rows).issues_for("DQ-MAT-008")
+
+    decided = cleanse.cleanse_materials(
+        rows, {("GVP", "000000000000700302"): "100236"}
+    )
+    assert decided.issues_for("DQ-MAT-008") == []
+
+
+def test_a_decision_naming_a_system_that_does_not_exist_is_refused(tmp_path):
+    """A one-character typo, misdiagnosed as a missing material.
+
+    The key matches nothing, so the merge does not happen and
+    REC-MRG-004 reports the material as absent from the extract -
+    sending a steward to look for a record that is right there.
+    """
+    table = tmp_path / "material_harmonisation.csv"
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVB,000000000000700302,100236,merge,Typo in the system column\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(extract.ExtractError) as error:
+        extract.read_harmonisation(table)
+    assert "GVB" in str(error.value)
+
+
 def test_a_padded_and_an_unpadded_decision_load_the_same_wave(tmp_path):
     """End to end, because the padding has to agree at every stage."""
     source = tmp_path / "wave0"
@@ -404,9 +474,10 @@ def test_a_padded_and_an_unpadded_decision_load_the_same_wave(tmp_path):
         wave="wave0", source_dir=source, out_dir=tmp_path / "padded"
     )
 
+    # Both sides at once: the material unpadded, the survivor padded.
     table.write_text(
         table.read_text(encoding="utf-8").replace(
-            "GVP,000000000000700302,", "GVP,700302,"
+            "GVP,000000000000700302,100236,", "GVP,700302,000000000000100236,"
         ),
         encoding="utf-8",
     )
