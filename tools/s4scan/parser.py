@@ -13,8 +13,19 @@ from dataclasses import dataclass, field
 
 _LINE_COMMENT = re.compile(r'"[^"]*$')
 _STRING_LITERAL = re.compile(r"'[^']*'")
-_LOOP_START = re.compile(r"^(LOOP\s+AT|DO\b|WHILE\b|SELECT\b.*\bENDSELECT)", re.IGNORECASE)
-_LOOP_END = re.compile(r"^(ENDLOOP|ENDDO|ENDWHILE)\b", re.IGNORECASE)
+_LOOP_START = re.compile(r"^(LOOP\s+AT|DO\b|WHILE\b)", re.IGNORECASE)
+_LOOP_END = re.compile(r"^(ENDLOOP|ENDDO|ENDWHILE|ENDSELECT)\b", re.IGNORECASE)
+_SELECT = re.compile(r"^SELECT(?![-\w])", re.IGNORECASE)
+# A SELECT that fills an internal table, reads a single row or returns
+# an aggregate delivers its result in one go. Anything else is a SELECT
+# loop closed by ENDSELECT: its body runs once per row, so statements
+# inside it are database access in a loop just as much as in a LOOP AT.
+_SELECT_SET_BASED = re.compile(
+    r"\bSINGLE\b"
+    r"|\b(COUNT|SUM|MIN|MAX|AVG)\s*\("
+    r"|\b(INTO|APPENDING)\s+(CORRESPONDING\s+FIELDS\s+OF\s+)?TABLE\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +85,12 @@ def strip_comments(line: str) -> str:
     return line.rstrip()
 
 
+def _opens_loop(text: str) -> bool:
+    if _SELECT.match(text):
+        return not _SELECT_SET_BASED.search(text)
+    return bool(_LOOP_START.match(text))
+
+
 def parse(path: str, source: str) -> AbapSource:
     """Split ABAP source into logical statements terminated by a period."""
     raw_lines = source.splitlines()
@@ -104,7 +121,7 @@ def parse(path: str, source: str) -> AbapSource:
             Statement(text=text, line=start_line, loop_depth=loop_depth)
         )
 
-        if _LOOP_START.match(text) and not text.upper().startswith("SELECT"):
+        if _opens_loop(text):
             loop_depth += 1
 
     if buffer:

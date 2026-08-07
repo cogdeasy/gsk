@@ -6,6 +6,8 @@ files plus the reconciliation evidence that the cutover and validation
 packages require.
 """
 
+from __future__ import annotations
+
 __all__ = ["extract", "cleanse", "mapping", "load", "reconcile", "pipeline"]
 
 __version__ = "0.1.0"

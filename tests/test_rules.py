@@ -21,6 +21,7 @@ def statement_for(source: str):
         ("SI-SD-001", "SELECT * FROM vbuk INTO TABLE gt_vbuk."),
         ("SI-SD-002", "SELECT SINGLE klimk FROM knkk INTO gv_limit."),
         ("SI-MD-001", "MODIFY kna1 FROM ls_kna1."),
+        ("SI-MD-002", "SELECT SINGLE name1 FROM kna1 INTO gv_name."),
         ("SI-PP-001", "SELECT * FROM mdtb INTO TABLE gt_mdtb."),
         ("SI-OM-001", "UPDATE nast SET vstat = '2'."),
         ("SI-QM-001", "SELECT * FROM mcha INTO TABLE gt_batch."),
@@ -61,6 +62,51 @@ def test_loop_only_rules_need_a_loop_context():
     parsed = parser.parse("x.abap", source)
     assert rule.evidence(parsed.statements[0]) is None
     assert rule.evidence(parsed.statements[2]) is not None
+
+
+def test_commit_in_a_loop_is_flagged_only_inside_the_loop():
+    rule = RULES_BY_ID["SI-TECH-007"]
+    source = "\n".join(
+        [
+            "COMMIT WORK.",
+            "LOOP AT gt_idoc.",
+            "  COMMIT WORK AND WAIT.",
+            "ENDLOOP.",
+        ]
+    )
+    parsed = parser.parse("x.abap", source)
+    assert rule.evidence(parsed.statements[0]) is None
+    assert rule.evidence(parsed.statements[2]) is not None
+
+
+def test_a_select_loop_is_a_loop():
+    rule = RULES_BY_ID["SI-TECH-007"]
+    source = "\n".join(
+        [
+            "SELECT matnr FROM mara INTO gv_matnr.",
+            "  COMMIT WORK.",
+            "ENDSELECT.",
+            "COMMIT WORK.",
+        ]
+    )
+    parsed = parser.parse("x.abap", source)
+    assert rule.evidence(parsed.statements[1]) is not None
+    assert rule.evidence(parsed.statements[3]) is None
+
+
+def test_a_set_based_select_does_not_open_a_loop():
+    parsed = parser.parse(
+        "x.abap",
+        "\n".join(
+            [
+                "SELECT matnr FROM mara INTO TABLE gt_mara.",
+                "SELECT SINGLE meins FROM marc INTO gv_meins.",
+                "SELECT COUNT(*) FROM mara INTO gv_count.",
+                "COMMIT WORK.",
+            ]
+        ),
+    )
+    assert [statement.loop_depth for statement in parsed.statements] == [0, 0, 0, 0]
 
 
 def test_commented_code_is_never_flagged():
