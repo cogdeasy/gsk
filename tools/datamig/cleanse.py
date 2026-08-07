@@ -558,7 +558,9 @@ def cleanse_partners(
     result = CleanseResult(object_name=object_name)
     prefix = "DQ-CUS" if object_name == "customers" else "DQ-VEN"
     seen: dict[PartnerIdentity, list[str]] = defaultdict(list)
-    numbers: dict[str, list[tuple[str, PartnerIdentity]]] = defaultdict(list)
+    numbers: dict[
+        str, list[tuple[str, PartnerIdentity, dict[str, str]]]
+    ] = defaultdict(list)
 
     for row in rows:
         key = source_key(row, key_field)
@@ -616,7 +618,7 @@ def cleanse_partners(
             # pad alike, so grouping on the number as written would
             # miss GEP's 0000210045 against GVP's 210045.
             numbers[strip_leading_zeros(row[key_field])].append(
-                (key, partner_identity(row))
+                (key, partner_identity(row), row)
             )
 
         if reject:
@@ -643,25 +645,57 @@ def cleanse_partners(
     # different entities the merge must key on the entity, not the
     # number, so the collision is reported before the load rather than
     # discovered as a wrongly combined partner afterwards.
+    def _named(group: list[tuple[str, PartnerIdentity, dict[str, str]]]) -> str:
+        # Each name carried by its own key rather than as a second list
+        # beside them. Two parallel lists get read positionally, and one
+        # sorted while the other is in extract order tells the steward
+        # the number belongs to the wrong company in the wrong system -
+        # the opposite of what these rules are for.
+        return "; ".join(sorted(f"{key} {identity[0]}" for key, identity, _ in group))
+
     for number, entries in numbers.items():
-        keys = [key for key, _ in entries]
-        identities = {identity for _, identity in entries}
-        if len({key.split("/", 1)[0] for key in keys}) > 1 and len(identities) > 1:
-            # Each name carried by its own key rather than as a second
-            # list beside them. Two parallel lists get read positionally,
-            # and one sorted while the other is in extract order tells
-            # the steward the number belongs to the wrong company in the
-            # wrong system - the opposite of what this rule is for.
-            named = sorted(
-                f"{key} {identity[0]}" for key, identity in entries
-            )
+        by_system: dict[str, list[tuple[str, PartnerIdentity, dict[str, str]]]] = (
+            defaultdict(list)
+        )
+        for key, identity, row in entries:
+            by_system[key.split("/", 1)[0]].append((key, identity, row))
+
+        if len(by_system) > 1 and len({identity for _, identity, _ in entries}) > 1:
             result.issues.append(
-                _issue(f"{prefix}-008", Action.WARN, object_name, ", ".join(keys),
-                       key_field,
+                _issue(f"{prefix}-008", Action.WARN, object_name,
+                       ", ".join(key for key, _, _ in entries), key_field,
                        f"number {number} exists in both source systems as "
-                       f"different entities ({'; '.join(named)}); it must "
+                       f"different entities ({_named(entries)}); it must "
                        "not be reused as the business partner number")
             )
+
+        # The same number twice inside one extract, for two entities.
+        # ECC cannot produce it - KNA1 and LFA1 are keyed on the number
+        # - so the extract is the broken thing, and it is not the
+        # tolerable case above: one source key, one cross reference
+        # entry, so the second record's open items would post against
+        # the first record's business partner. Held rather than warned,
+        # because nothing downstream can tell the two apart.
+        for system, group in by_system.items():
+            if len({identity for _, identity, _ in group}) < 2:
+                continue
+            result.issues.append(
+                _issue(f"{prefix}-009", Action.REJECT, object_name,
+                       ", ".join(key for key, _, _ in group), key_field,
+                       f"number {number} is held more than once in {system} "
+                       f"for different entities ({_named(group)}); the extract "
+                       "cannot be loaded until it is corrected")
+            )
+            # By identity, not by key: the two rows share a key, so
+            # moving by key would move a row another rule has already
+            # rejected and count it twice in the evidence pack.
+            held = {id(row) for _, _, row in group}
+            result.rejected.extend(
+                row for row in result.accepted if id(row) in held
+            )
+            result.accepted[:] = [
+                row for row in result.accepted if id(row) not in held
+            ]
 
     return result
 
@@ -680,6 +714,7 @@ def cleanse_open_items(
     for (system, bukrs, belnr, gjahr), lines in documents.items():
         key = f"{system}/{bukrs}/{belnr}/{gjahr}"
         reject_document = False
+        undated = False
 
         debit = sum(
             (Decimal(line["DMBTR"]) for line in lines if line["SHKZG"] == "S"),
@@ -720,7 +755,12 @@ def cleanse_open_items(
                            f"{account}{partner} is not in the migrated master "
                            f"data for {system}")
                 )
-            if partner and not line["ZFBDT"]:
+            # Raised once for the document, which is what the exception
+            # is keyed on: a second partner line with the same gap is
+            # the same exception, and counting it twice inflates the
+            # warning column against a steward with one thing to fix.
+            if partner and not line["ZFBDT"] and not undated:
+                undated = True
                 result.issues.append(
                     _issue("DQ-FI-003", Action.WARN, "open_items", key, "ZFBDT",
                            "open item has no baseline date, ageing will be wrong")

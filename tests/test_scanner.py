@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 
@@ -6,7 +7,13 @@ import pytest
 from s4scan import report
 from s4scan.inventory import Inventory, InventoryError, is_a_duplication, wave_rank
 from s4scan.rules import RuleFilter, Severity
-from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
+from s4scan.scanner import (
+    ScanResult,
+    has_test_class,
+    object_name_for,
+    scan,
+    scan_file,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEGACY = REPO_ROOT / "abap" / "ecc"
@@ -16,6 +23,26 @@ INVENTORY = REPO_ROOT / "estate" / "inventory.csv"
 
 def load_inventory() -> Inventory:
     return Inventory.load(INVENTORY)
+
+
+_LEGACY_SCAN: ScanResult | None = None
+
+
+def legacy_scan() -> ScanResult:
+    """A copy of the ECC estate scan, parsed once for the whole run.
+
+    Every caller here wants the same scan of the same files, and
+    copying the result is an order of magnitude cheaper than parsing
+    both systems again - `AGENTS.md` holds the suite to a second. A
+    copy rather than the result itself because `ScanResult.filter`
+    mutates, so a shared one would carry a previous test's view.
+    """
+    global _LEGACY_SCAN
+    if _LEGACY_SCAN is None:
+        _LEGACY_SCAN = scan(
+            [LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"]
+        )
+    return copy.deepcopy(_LEGACY_SCAN)
 
 
 def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
@@ -67,7 +94,7 @@ def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
 
 def test_a_group_with_nothing_left_to_build_has_no_estimate():
     """`max()` over no members says nothing about which group broke."""
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     group = next(
         group for group in result.convergence_groups()
         if not group.outstanding
@@ -105,7 +132,7 @@ def test_the_two_duplication_predicates_agree():
     leaves a finding on an object whose group appears in no table.
     """
     inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     groups = {group.group_id: group for group in result.convergence_groups()}
     assert groups
 
@@ -145,15 +172,13 @@ def test_a_scan_of_one_system_directory_explains_the_groups_it_flags():
 
 
 def test_a_scan_of_the_whole_estate_leaves_no_group_unexplained():
-    inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     assert not result.groups_beyond_scan()
 
 
 def test_a_system_view_prices_its_groups_rather_than_deferring_them():
     """`--system` scans the estate and narrows the view afterwards."""
-    inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     result.filter(view=lambda obj: obj.source_system == "GVP")
 
     assert result.convergence_groups()
@@ -200,7 +225,7 @@ def test_every_remediated_path_points_at_a_real_file():
 
 
 def test_remediated_objects_leave_the_backlog():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     remediated = {obj.object_name for obj in result.remediated()}
     assert "ZGSK_MM_STOCK_OVERVIEW" in remediated
     assert remediated & {obj.object_name for obj in result.objects_with_findings()}
@@ -208,7 +233,7 @@ def test_remediated_objects_leave_the_backlog():
 
 
 def test_remediation_moves_findings_from_outstanding_to_cleared():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     payload = json.loads(report.to_json(result))
     summary = payload["summary"]
 
@@ -238,7 +263,7 @@ def test_every_object_belongs_to_a_source_system():
 
 
 def test_scan_carries_the_source_system_through():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     by_system = result.by_source_system()
     assert set(by_system) == {"GEP", "GVP"}
     assert all(by_system.values())
@@ -246,7 +271,7 @@ def test_scan_carries_the_source_system_through():
 
 
 def test_convergence_groups_pair_the_two_systems():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     groups = result.convergence_groups()
     assert groups
     for group in groups:
@@ -255,7 +280,7 @@ def test_convergence_groups_pair_the_two_systems():
 
 
 def test_duplicated_function_is_raised_against_both_implementations():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     flagged = {
         obj.object_name: obj
         for obj in result.objects
@@ -316,10 +341,8 @@ def test_filtering_twice_gives_what_filtering_once_gives():
     silently: the wave applied second would take its estate from the
     system view and leave every convergence group dissolved.
     """
-    def scanned() -> object:
-        return scan(
-            [LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"]
-        )
+    def scanned() -> ScanResult:
+        return legacy_scan()
 
     def wave(obj) -> bool:
         return obj.wave == "wave0"
@@ -374,7 +397,7 @@ def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
 
 
 def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     dropped = [
         group for group in result.convergence_groups() if group.is_decommissioned
     ]
@@ -386,7 +409,7 @@ def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():
 
 
 def test_objects_dropped_at_the_merge_are_not_in_the_backlog():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     decommissioned = result.decommissioned()
     assert decommissioned
     assert all(obj.findings for obj in decommissioned)
@@ -399,7 +422,7 @@ def test_objects_dropped_at_the_merge_are_not_in_the_backlog():
 
 
 def test_convergence_estimate_is_cheaper_than_remediating_both():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     estimates = report.convergence_estimates(result)
     assert estimates
     assert {estimate.group_id for estimate in estimates} == {
@@ -415,7 +438,7 @@ def test_convergence_estimate_is_cheaper_than_remediating_both():
 
 def test_a_group_whose_counterpart_is_built_claims_no_saving():
     """The saving was banked when the first object was rebuilt."""
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     settled = report.groups_with_built_counterpart(result)
     assert settled
 
@@ -426,7 +449,7 @@ def test_a_group_whose_counterpart_is_built_claims_no_saving():
 
 
 def test_convergence_estimate_ignores_an_already_remediated_member():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     for estimate in report.convergence_estimates(result):
         group = next(
             group for group in result.convergence_groups()
@@ -441,7 +464,7 @@ def test_convergence_estimate_ignores_an_already_remediated_member():
 
 def test_the_object_left_over_still_must_not_be_remediated_alone():
     """Its counterpart exists in S/4HANA, so it folds into that."""
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     for group in report.groups_with_built_counterpart(result):
         for obj in group.outstanding:
             assert "SI-CONV-001" in {finding.rule.id for finding in obj.findings}
@@ -455,7 +478,7 @@ def test_every_legacy_source_is_in_the_inventory():
 
 
 def test_legacy_estate_has_blocking_findings():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     assert result.has_severity(Severity.BLOCKER)
     assert len(result.objects_with_findings()) == len(result.objects)
 
@@ -481,7 +504,7 @@ def test_stock_overview_findings_name_the_expected_rules():
 
 def test_gxp_rule_only_fires_for_gxp_objects_without_tests():
     inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     flagged = {
         obj.object_name
         for obj in result.objects
@@ -494,8 +517,7 @@ def test_gxp_rule_only_fires_for_gxp_objects_without_tests():
 
 
 def test_validation_multiplier_inflates_gxp_effort():
-    inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     gxp_objects = [obj for obj in result.objects if obj.gxp_class == "gxp_critical"]
     assert gxp_objects
     for obj in gxp_objects:
@@ -513,7 +535,7 @@ def test_rule_filter_restricts_the_scan():
 
 
 def test_backlog_is_ordered_by_wave_then_severity():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     backlog = report.build_backlog(result)
     waves = [obj.wave for obj in backlog]
     assert waves == sorted(waves, key=wave_rank)
@@ -521,7 +543,7 @@ def test_backlog_is_ordered_by_wave_then_severity():
 
 
 def test_markdown_report_contains_the_key_sections():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     markdown = report.to_markdown(result)
     for heading in (
         "# Custom code remediation backlog",
@@ -536,7 +558,7 @@ def test_markdown_report_contains_the_key_sections():
 def test_json_report_is_machine_readable():
     import json
 
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     payload = json.loads(report.to_json(result))
     assert payload["summary"]["findings"] == len(result.findings)
     assert payload["effort"]["engineer_days"] > 0

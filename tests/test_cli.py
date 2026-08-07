@@ -27,6 +27,24 @@ def _group_count(output: str) -> int:
     return int(line.split(":", 1)[1].split()[0])
 
 
+_SUMMARY: dict[tuple[str, ...], str] = {}
+
+
+def summary(capsys, *args: str) -> str:
+    """The scan summary for one argument list, produced once per run.
+
+    The scan reads the estate and writes nothing, so the same arguments
+    give the same output however many tests ask for it. Running it
+    again per assertion re-parses every ABAP file in both systems, and
+    `AGENTS.md` holds the suite to a second.
+    """
+    argv = ("scan", *args)
+    if argv not in _SUMMARY:
+        assert s4scan_cli.main(list(argv)) == 0
+        _SUMMARY[argv] = capsys.readouterr().out
+    return _SUMMARY[argv]
+
+
 def test_s4scan_rules_command_lists_the_catalogue(capsys):
     assert s4scan_cli.main(["rules"]) == 0
     output = capsys.readouterr().out
@@ -77,11 +95,8 @@ def test_s4scan_passes_on_the_remediated_reference(capsys):
 
 
 def test_s4scan_system_filter_restricts_the_scan(capsys):
-    s4scan_cli.main(["scan", "abap/ecc"])
-    both = capsys.readouterr().out
-
-    s4scan_cli.main(["scan", "abap/ecc", "--system", "GVP"])
-    vaccines_only = capsys.readouterr().out
+    both = summary(capsys, "abap/ecc")
+    vaccines_only = summary(capsys, "abap/ecc", "--system", "GVP")
 
     assert "GEP" in both and "GVP" in both
     assert "GVP" in vaccines_only
@@ -96,11 +111,8 @@ def test_a_single_system_view_still_prices_the_duplication(capsys):
     nothing is duplicated - while the same output flags every one of
     those objects with SI-CONV-001.
     """
-    s4scan_cli.main(["scan", "abap/ecc"])
-    both = capsys.readouterr().out
-
-    s4scan_cli.main(["scan", "abap/ecc", "--system", "GVP"])
-    vaccines_only = capsys.readouterr().out
+    both = summary(capsys, "abap/ecc")
+    vaccines_only = summary(capsys, "abap/ecc", "--system", "GVP")
 
     # The same groups, not a fixed number of them: how many the estate
     # holds moves with the inventory, and pinning it would break this
@@ -119,12 +131,9 @@ def test_a_wave_view_prices_only_its_own_groups(capsys):
     still span, --wave narrows the estate itself: the group is planned
     and delivered as one piece of work within a wave.
     """
-    s4scan_cli.main(["scan", "abap/ecc"])
-    every_wave = capsys.readouterr().out
-    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0"])
-    wave0 = capsys.readouterr().out
-    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave1"])
-    wave1 = capsys.readouterr().out
+    every_wave = summary(capsys, "abap/ecc")
+    wave0 = summary(capsys, "abap/ecc", "--wave", "wave0")
+    wave1 = summary(capsys, "abap/ecc", "--wave", "wave1")
 
     # Each wave holds some of the groups and the waves together hold
     # all of them - a group belongs to exactly one wave, which the
@@ -143,10 +152,8 @@ def test_narrowing_a_wave_within_a_system_view_keeps_the_view(capsys):
     system must still leave them whole - a system view that dissolved
     them would report no convergence at all.
     """
-    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0", "--system", "GVP"])
-    filtered = capsys.readouterr().out
-    s4scan_cli.main(["scan", "abap/ecc", "--wave", "wave0"])
-    wave0 = capsys.readouterr().out
+    filtered = summary(capsys, "abap/ecc", "--wave", "wave0", "--system", "GVP")
+    wave0 = summary(capsys, "abap/ecc", "--wave", "wave0")
 
     assert _group_count(filtered) == _group_count(wave0)
     assert _group_count(filtered) > 0
@@ -154,8 +161,7 @@ def test_narrowing_a_wave_within_a_system_view_keeps_the_view(capsys):
 
 
 def test_s4scan_summary_reports_the_merge(capsys):
-    s4scan_cli.main(["scan", "abap/ecc"])
-    output = capsys.readouterr().out
+    output = summary(capsys, "abap/ecc")
     assert "convergence groups" in output
     assert "decommissioned" in output
 
@@ -167,8 +173,7 @@ def test_s4scan_summary_accounts_for_every_duplication_it_flags(capsys):
     summary looks like it has mislaid a group, and only the markdown
     report says otherwise.
     """
-    s4scan_cli.main(["scan", "abap/ecc"])
-    output = capsys.readouterr().out
+    output = summary(capsys, "abap/ecc")
     groups = {
         line.split(":", 1)[0].strip(): int(line.split(":", 1)[1].split()[0])
         for line in output.splitlines()

@@ -122,12 +122,20 @@ gets revisited.
 The same problem appears in `tools/datamig`, where it is arithmetic
 rather than judgement.
 
-**Source keys are qualified with the system.** `GEP/0000210045` and
-`GVP/0000210045` are two different companies (NHS Supply Chain, and
-Institut Pasteur de Dakar). `DQ-CUS-008` and `DQ-VEN-008` report every
-number that is reused across the two systems for different entities, so
-the collision is on the record before cutover rather than discovered
-afterwards as a wrongly combined partner.
+**Source keys are qualified with the system and the account type.**
+`GEP/C/0000210045` and `GVP/C/0000210045` are two different companies
+(NHS Supply Chain, and Institut Pasteur de Dakar), and `GEP/V/...` is a
+third: the split between the customer and supplier ranges is a
+convention of the shared template, not a constraint. `DQ-CUS-008` and
+`DQ-VEN-008` report every number reused across the two systems for
+different entities, so the collision is on the record before cutover
+rather than discovered afterwards as a wrongly combined partner.
+
+The same number twice *inside* one extract is a different matter:
+KNA1 and LFA1 are keyed on the number, so ECC cannot produce it and
+the extract itself is wrong. `DQ-CUS-009` and `DQ-VEN-009` hold both
+records, because one source key cannot carry two companies and the
+loser's open items would post against the winner's business partner.
 
 **Partners merge on the legal entity.** UNICEF Supply Division is a
 customer in both systems under different numbers; it becomes one

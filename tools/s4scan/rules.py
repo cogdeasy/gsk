@@ -68,6 +68,22 @@ class Rule:
     write_only: bool = False
     patterns: tuple[re.Pattern[str], ...] = ()
     requires_loop: bool = False
+    # Compiled once for the rule rather than per statement. The table
+    # list stays the readable form: `tables=("MKPF", "MSEG")` is what a
+    # reader checks against the simplification item, `\bMKPF\b` is not.
+    _table_patterns: tuple[tuple[str, re.Pattern[str]], ...] = field(
+        default=(), init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "_table_patterns",
+            tuple(
+                (table, re.compile(rf"\b{table}\b", re.IGNORECASE))
+                for table in self.tables
+            ),
+        )
 
     def evidence(self, statement) -> str | None:
         """Return the matched text if the statement violates this rule."""
@@ -80,8 +96,8 @@ class Rule:
                 return None
             if self.write_only and not _WRITE_STATEMENT.match(text):
                 return None
-            for table in self.tables:
-                if re.search(rf"\b{table}\b", text, re.IGNORECASE):
+            for table, pattern in self._table_patterns:
+                if pattern.search(text):
                     return table.upper()
 
         for pattern in self.patterns:

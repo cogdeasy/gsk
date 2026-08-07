@@ -189,6 +189,85 @@ def test_a_number_padded_differently_by_each_system_still_collides():
     assert "210045" in collisions[0].message
 
 
+def test_one_number_twice_in_one_extract_holds_both_records():
+    """KNA1 is keyed on KUNNR, so the extract is the broken thing.
+
+    Both records carry the same source key, so the cross reference
+    holds one entry and the losing company's open items resolve to the
+    other company's business partner. A warning would let that load;
+    the reconciliation would then fail on a count with no exception
+    naming the cause.
+    """
+    def customer(number: str, name: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": number, "NAME1": name,
+            "LAND1": "GB", "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [
+            customer("0000210045", "NHS SUPPLY CHAIN"),
+            customer("0000210045", "BOOTS UK LTD"),
+        ],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    held = outcome.issues_for("DQ-CUS-009")
+    assert len(held) == 1
+    assert held[0].action is Action.REJECT
+    assert "GEP/0000210045 NHS SUPPLY CHAIN" in held[0].message
+    assert "GEP/0000210045 BOOTS UK LTD" in held[0].message
+    assert outcome.accepted == []
+    assert len(outcome.rejected) == 2
+    # Two systems is the tolerable case and stays a warning; this is
+    # not that, and must not be reported as it.
+    assert outcome.issues_for("DQ-CUS-008") == []
+
+
+def test_a_record_already_rejected_is_not_held_a_second_time():
+    """The two rows share a key, so key-based removal counts one twice."""
+    def customer(number: str, name: str, country: str = "GB") -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "KUNNR": number, "NAME1": name,
+            "LAND1": country, "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [
+            customer("0000210045", "NHS SUPPLY CHAIN"),
+            customer("0000210045", "BOOTS UK LTD", country="XX"),
+        ],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    assert outcome.issues_for("DQ-CUS-009")
+    assert len(outcome.rejected) == 2
+    assert outcome.source_count == 2
+
+
+def test_one_undated_document_raises_one_warning():
+    """Two lines of one document with no baseline date are one gap."""
+    def line(buzei: str, shkzg: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "BUKRS": "GB01", "BELNR": "1900000001",
+            "GJAHR": "2026", "BUZEI": buzei, "BLART": "RV", "HKONT": "140000",
+            "PARTNER": "0000210045", "PARTNER_TYPE": "C", "SHKZG": shkzg,
+            "DMBTR": "100.00", "WAERS": "GBP", "BUDAT": "20260615", "ZFBDT": "",
+        }
+
+    outcome = cleanse.cleanse_open_items(
+        [line("001", "S"), line("002", "H")], {"GEP/C/0000210045"}
+    )
+    assert len(outcome.issues_for("DQ-FI-003")) == 1
+    assert len(outcome.accepted) == 2
+
+
 def test_harmonised_materials_collapse_into_one_product(result):
     products = {row["Product"] for row in result.products}
     xref = result.product_result.xref
