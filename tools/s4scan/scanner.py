@@ -209,10 +209,30 @@ class ScanResult:
         return self.estate is not None
 
     def restrict_to(self, objects: list[ObjectResult]) -> None:
-        """Narrow the view, remembering the estate it was taken from."""
+        """Narrow the view, remembering the estate it was taken from.
+
+        For a filter that selects part of a convergence group - a
+        source system - so the group's economics stay whole.
+        """
         if self.estate is None:
             self.estate = list(self.objects)
         self.objects = objects
+
+    def narrow_estate(self, objects: list[ObjectResult]) -> None:
+        """Narrow what the scan is about, groups and all.
+
+        For a filter that selects whole convergence groups - a wave -
+        where work outside the selection genuinely is not this scan's
+        business and must not be priced into it.
+
+        Every filter must go through this or `restrict_to`. Assigning
+        `objects` directly is the trap: `convergence_groups()` falls
+        back to `objects` only while `estate` is None, so a new filter
+        written that way would dissolve every group without a word.
+        """
+        self.objects = objects
+        if self.estate is not None:
+            self.estate = objects
 
     @property
     def findings(self) -> list[Finding]:

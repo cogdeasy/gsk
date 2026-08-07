@@ -17,7 +17,7 @@ unexplained shortfall is data loss wearing a merge's clothes.
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -471,7 +471,9 @@ def build(
         )
         for row in loaded_stock
     ]
-    duplicated = sorted({key for key in target_keys if target_keys.count(key) > 1})
+    duplicated = sorted(
+        key for key, seen in Counter(target_keys).items() if seen > 1
+    )
     reconciliation.checks.append(
         Check(
             id="REC-STK-KEY",

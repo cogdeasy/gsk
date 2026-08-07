@@ -35,6 +35,11 @@ EXTRACT_FILES = {
 
 HARMONISATION_FILE = "material_harmonisation.csv"
 
+#: What the governed decision table is allowed to say. Mapping acts on
+#: ``merge`` and ignores anything else, so an unrecognised value has to
+#: stop the run rather than quietly leave both products loaded.
+HARMONISATION_DECISIONS = frozenset({"merge", "keep_separate"})
+
 SYSTEM_FIELD = "SOURCE_SYSTEM"
 
 
@@ -105,7 +110,7 @@ def read_harmonisation(path: str | Path) -> list[HarmonisationDecision]:
                     source_system=row["SOURCE_SYSTEM"].strip().upper(),
                     material=row["MATNR"].strip(),
                     target_product=row["TARGET_PRODUCT"].strip(),
-                    decision=row["DECISION"].strip(),
+                    decision=row["DECISION"].strip().lower(),
                     note=(row.get("NOTE") or "").strip(),
                 )
             )
@@ -119,14 +124,27 @@ def _validate_harmonisation(
     """Refuse a decision table that does not say one thing.
 
     This is a governed table with a regulatory consequence, so a
-    decision resolved by file order is not a decision. Chains are
-    caught by DQ-MAT-011 during cleansing instead: whether a target
-    number really disappears depends on what the extracts contain,
-    which is not knowable here.
+    decision resolved by file order is not a decision, and a decision
+    the pipeline does not recognise is not a decision either: mapping
+    acts on ``merge`` and ignores everything else, which would let a
+    typo reverse a signed-off merge in silence. Chains are caught by
+    DQ-MAT-011 during cleansing instead: whether a target number really
+    disappears depends on what the extracts contain, which is not
+    knowable here.
+
+    The duplicate guard compares material numbers unpadded, matching
+    DQ-MAT-009: the two systems' number ranges are the reason the table
+    exists, and 100801 and 000000000000100801 are the same material.
     """
     seen: set[tuple[str, str]] = set()
     for decision in decisions:
-        key = (decision.source_system, decision.material)
+        if decision.decision not in HARMONISATION_DECISIONS:
+            raise ExtractError(
+                f"{file_path}: {decision.source_system}/{decision.material} "
+                f"has decision '{decision.decision}', which the pipeline does "
+                f"not act on; use one of {', '.join(sorted(HARMONISATION_DECISIONS))}"
+            )
+        key = (decision.source_system, decision.material.lstrip("0") or "0")
         if key in seen:
             raise ExtractError(
                 f"{file_path}: {decision.source_system}/{decision.material} "

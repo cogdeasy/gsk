@@ -109,7 +109,9 @@ def _run_scan(args: argparse.Namespace) -> int:
     # narrow the estate itself. A system is not a plan: the same group
     # spans both, so `--system` narrows only the view.
     if args.wave:
-        result.objects = [obj for obj in result.objects if obj.wave == args.wave]
+        result.narrow_estate(
+            [obj for obj in result.objects if obj.wave == args.wave]
+        )
 
     if args.system:
         result.restrict_to(

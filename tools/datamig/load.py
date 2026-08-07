@@ -24,9 +24,14 @@ def write_rows(path: str | Path, rows: list[dict[str, str]]) -> Path:
         file_path.write_text("", encoding="utf-8")
         return file_path
 
-    fieldnames = list(rows[0].keys())
+    # Union rather than the first row's keys: reject files mix rows from
+    # both source systems, and the day one extract carries a column the
+    # other does not, taking the header from whichever row happens to be
+    # first either drops that column from the evidence or fails the run,
+    # depending on the order. First-seen order keeps the file stable.
+    fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     with open(file_path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, restval="")
         writer.writeheader()
         writer.writerows(rows)
     return file_path

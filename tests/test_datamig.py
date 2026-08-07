@@ -361,6 +361,28 @@ def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     assert not check.passed
 
 
+def test_a_reject_file_keeps_a_column_only_one_system_has(tmp_path):
+    """Reject files mix both systems' rows into one evidence file.
+
+    Taking the header from the first row would either drop the column
+    or fail the write, depending on which system's row came first.
+    """
+    from datamig import load
+
+    path = load.write_rejects(
+        tmp_path,
+        "materials",
+        [
+            {"SOURCE_SYSTEM": "GEP", "MATNR": "100251"},
+            {"SOURCE_SYSTEM": "GVP", "MATNR": "700301", "OCABR_REQUIRED": "X"},
+        ],
+    )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "SOURCE_SYSTEM,MATNR,OCABR_REQUIRED"
+    assert lines[1] == "GEP,100251,"
+    assert lines[2] == "GVP,700301,X"
+
+
 def test_two_decisions_for_one_material_are_refused(tmp_path):
     """File order must not decide which survivor a steward signed off."""
     table = tmp_path / extract.HARMONISATION_FILE
@@ -372,6 +394,87 @@ def test_two_decisions_for_one_material_are_refused(tmp_path):
     )
     with pytest.raises(extract.ExtractError, match="more than one decision"):
         extract.read_harmonisation(table)
+
+
+def test_two_decisions_differing_only_in_padding_are_refused(tmp_path):
+    """Same guard, and the padding must not get a decision past it."""
+    table = tmp_path / extract.HARMONISATION_FILE
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVP,000000000000700301,100251,merge,First\n"
+        "GVP,700301,100999,merge,Second\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(extract.ExtractError, match="more than one decision"):
+        extract.read_harmonisation(table)
+
+
+def test_a_decision_the_pipeline_cannot_act_on_stops_the_run(tmp_path):
+    """Mapping acts on 'merge' and ignores the rest.
+
+    Left unchecked, a typo is indistinguishable from a decision never
+    taken: the duplicate simply loads twice under two numbers and no
+    check sees a decision to compare against.
+    """
+    table = tmp_path / extract.HARMONISATION_FILE
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVP,000000000000700301,100251,mrege,Typo\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(extract.ExtractError, match="does not act on"):
+        extract.read_harmonisation(table)
+
+
+def test_a_decision_is_read_case_insensitively(tmp_path):
+    """'Merge' is the same decision as 'merge'."""
+    table = tmp_path / extract.HARMONISATION_FILE
+    table.write_text(
+        "SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE\n"
+        "GVP,000000000000700301,100251,Merge,Signed off\n",
+        encoding="utf-8",
+    )
+    harmonisation = mapping.ProductHarmonisation(extract.read_harmonisation(table))
+    assert harmonisation.merged_materials
+
+
+def test_held_stock_names_the_rule_that_actually_held_the_material():
+    """A steward reading the reject has to be able to find the rule."""
+    targets = {("GVP", "000000000000700301"): "100251"}
+    survivor = _material("GEP", "000000000000100251", "CORE ADJUVANT")
+    survivor["MEINS"] = "ST"
+    retired = _material("GVP", "000000000000700301", "ADJUVANT WAVRE")
+    retired["MEINS"] = "KG"
+
+    materials = cleanse.cleanse_materials(
+        [survivor, retired], harmonisation_targets=targets
+    )
+    assert materials.issues_for("DQ-MAT-012")
+
+    stock = cleanse.cleanse_batch_stock(
+        [
+            {
+                "SOURCE_SYSTEM": "GVP",
+                "WERKS": "BE33",
+                "LGORT": "0001",
+                "MATNR": "000000000000700301",
+                "CHARG": "AH2600017",
+                "CLABS": "10.000",
+                "CINSM": "0.000",
+                "CSPEM": "0.000",
+                "MEINS": "KG",
+                "VFDAT": "20290331",
+                "HSDAT": "20260331",
+                "ZUSTD": "F",
+            }
+        ],
+        materials={},
+        harmonisation_holds=materials.harmonisation_holds,
+    )
+    held = stock.issues_for("DQ-STK-006")
+    assert len(held) == 1
+    assert "DQ-MAT-012" in held[0].message
+    assert "DQ-MAT-010" not in held[0].message
 
 
 def test_a_merge_into_a_retired_material_is_refused():

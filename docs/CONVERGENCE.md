@@ -152,7 +152,12 @@ which names the collision rather than reporting a missing master.
 
 **A decision has to say one thing.** A second decision row for the same
 material used to be resolved by file order, which is not a governed
-decision at all, so the extract refuses it. A decision naming a product
+decision at all, so the extract refuses it - comparing the numbers
+unpadded, since `100801` and `000000000000100801` are the same
+material. A `DECISION` value the pipeline does not act on is refused
+for the same reason: mapping acts on `merge`, so a typo would leave
+the duplicate loading twice under two numbers with no decision for any
+check to compare against. A decision naming a product
 that another decision itself retires is refused too, but during
 cleansing rather than on read: whether that number really disappears
 depends on the extracts, because a record in the other system carrying
@@ -176,7 +181,9 @@ split the product's stock across two numbers. It is held back until the
 surviving master is corrected, and the batches sitting on that material
 are held with it under `DQ-STK-006`, which names the harmonisation
 rather than reporting a missing master the steward would go looking
-for.
+for. Three rules can hold a merged material - `DQ-MAT-010`, `-011` and
+`-012` - and they are three different pieces of work, so the stock
+reject quotes whichever one actually fired rather than a fixed one.
 
 **The merge is reconciled, not assumed.** With two sources loading into
 one client, fewer target records than source records is the intended

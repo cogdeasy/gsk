@@ -55,6 +55,25 @@ class Action(str, Enum):
 
 
 @dataclass(frozen=True)
+class HarmonisationHold:
+    """Why a material that was to be merged is not in the load.
+
+    Three rules hold a merged material back and they are not the same
+    problem: DQ-MAT-010 means the surviving product was itself
+    rejected, DQ-MAT-011 that the decision points at a number another
+    decision retires, DQ-MAT-012 that the two are held in different
+    base units. Stock behind the material is rejected in turn, and the
+    steward reading that reject needs the rule that actually fired -
+    naming the wrong one sends them looking for an exception that was
+    never raised.
+    """
+
+    target_product: str
+    rule: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Issue:
     rule_id: str
     action: Action
@@ -80,10 +99,10 @@ class CleanseResult:
     accepted: list[dict[str, str]] = field(default_factory=list)
     rejected: list[dict[str, str]] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
-    #: Source key -> the product it was harmonised into, for records
-    #: held back by `DQ-MAT-010`. Downstream objects need the reason,
-    #: not just the absence, to report their own rejects usefully.
-    harmonisation_holds: dict[str, str] = field(default_factory=dict)
+    #: Source key -> why a harmonised material is not in the load.
+    #: Downstream objects need the reason, not just the absence, to
+    #: report their own rejects usefully.
+    harmonisation_holds: dict[str, HarmonisationHold] = field(default_factory=dict)
     #: Source keys held back by `DQ-MAT-009` - the number means two
     #: things and nobody has said which survives. Same reason as
     #: above: the absence alone would read as a missing master.
@@ -251,7 +270,11 @@ def _reject_unit_mismatches(
     for row in mismatched:
         target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
         result.rejected.append(row)
-        result.harmonisation_holds[source_key(row, "MATNR")] = target
+        result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+            target_product=target,
+            rule="DQ-MAT-012",
+            reason="which is held in a different base unit",
+        )
         result.issues.append(
             _issue("DQ-MAT-012", Action.REJECT, "materials",
                    source_key(row, "MATNR"), "MEINS",
@@ -369,8 +392,12 @@ def _reject_orphaned_merges(
     for row in orphaned:
         target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
         result.rejected.append(row)
-        result.harmonisation_holds[source_key(row, "MATNR")] = target
         if target in retired:
+            result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+                target_product=target,
+                rule="DQ-MAT-011",
+                reason="which another decision itself retires",
+            )
             result.issues.append(
                 _issue("DQ-MAT-011", Action.REJECT, "materials",
                        source_key(row, "MATNR"), "MATNR",
@@ -380,6 +407,11 @@ def _reject_orphaned_merges(
                        "became, so name the surviving product directly")
             )
             continue
+        result.harmonisation_holds[source_key(row, "MATNR")] = HarmonisationHold(
+            target_product=target,
+            rule="DQ-MAT-010",
+            reason="which cleansing itself held back",
+        )
         result.issues.append(
             _issue("DQ-MAT-010", Action.REJECT, "materials",
                    source_key(row, "MATNR"), "MATNR",
@@ -547,7 +579,7 @@ def cleanse_open_items(
 def cleanse_batch_stock(
     rows: list[dict[str, str]],
     materials: dict[str, dict[str, str]],
-    harmonisation_holds: dict[str, str] | None = None,
+    harmonisation_holds: dict[str, HarmonisationHold] | None = None,
     collision_holds: set[str] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="batch_stock")
@@ -565,11 +597,12 @@ def cleanse_batch_stock(
             # for a record that was deliberately retired. The work is
             # on the surviving product, or on the decision itself.
             reject = True
+            hold = holds[material_key]
             result.issues.append(
                 _issue("DQ-STK-006", Action.REJECT, "batch_stock", key, "MATNR",
                        f"material was harmonised into product "
-                       f"{holds[material_key]}, which cleansing held back "
-                       "(DQ-MAT-010); this stock loads once that product does")
+                       f"{hold.target_product}, {hold.reason} ({hold.rule}); "
+                       "this stock loads once that is resolved")
             )
         elif material is None and material_key in collisions:
             # Same reasoning as DQ-STK-006: the master is absent by
