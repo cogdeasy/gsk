@@ -322,7 +322,11 @@ def to_markdown(result: ScanResult) -> str:
     if by_source_system(result):
         lines.extend(_source_system_section(result, backlog))
     lines.extend(
-        _convergence_section(convergence, groups_with_built_counterpart(result))
+        _convergence_section(
+            convergence,
+            groups_with_built_counterpart(result),
+            filtered=result.is_filtered,
+        )
     )
     lines.extend(_decommission_section(decommissioned))
 
@@ -483,11 +487,20 @@ def _source_system_section(
 def _convergence_section(
     convergence: list[ConvergenceEstimate],
     already_built: list[ConvergenceGroup] | None = None,
+    filtered: bool = False,
 ) -> list[str]:
     if not convergence and not already_built:
         return []
 
     lines = ["## Convergence backlog", ""]
+    if filtered:
+        lines.append(
+            "This is a filtered view. The groups below have a member "
+            "outside it, and the days are the whole group's - a "
+            "programme saving, realised once, not attributable to "
+            "either system on its own."
+        )
+        lines.append("")
     lines.append(
         "Functions implemented separately in both ECC systems. Each "
         "group becomes one S/4HANA object, so it is planned and "

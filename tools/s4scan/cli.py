@@ -105,12 +105,14 @@ def _run_scan(args: argparse.Namespace) -> int:
     )
 
     if args.wave:
-        result.objects = [obj for obj in result.objects if obj.wave == args.wave]
+        result.restrict_to(
+            [obj for obj in result.objects if obj.wave == args.wave]
+        )
 
     if args.system:
-        result.objects = [
-            obj for obj in result.objects if obj.source_system == args.system
-        ]
+        result.restrict_to(
+            [obj for obj in result.objects if obj.source_system == args.system]
+        )
 
     if args.format == "json":
         output = to_json(result)
@@ -173,6 +175,11 @@ def _summary(result) -> str:
             f"convergence groups    : {len(convergence)} "
             f"({avoided} engineer-days avoided by building one object)"
         )
+        if result.is_filtered:
+            lines.append(
+                "                        whole-group days; the saving is "
+                "the programme's, not this view's"
+            )
 
     lines.append("")
     lines.append("top rules:")

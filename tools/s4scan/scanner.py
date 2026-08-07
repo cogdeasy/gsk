@@ -188,6 +188,21 @@ class ConvergenceGroup:
 @dataclass
 class ScanResult:
     objects: list[ObjectResult] = field(default_factory=list)
+    # Everything scanned, before a view filter such as `--system`
+    # narrowed `objects`. A convergence group is cross-system by
+    # definition, so grouping over the narrowed list would dissolve
+    # every group.
+    estate: list[ObjectResult] | None = None
+
+    @property
+    def is_filtered(self) -> bool:
+        return self.estate is not None
+
+    def restrict_to(self, objects: list[ObjectResult]) -> None:
+        """Narrow the view, remembering the estate it was taken from."""
+        if self.estate is None:
+            self.estate = list(self.objects)
+        self.objects = objects
 
     @property
     def findings(self) -> list[Finding]:
@@ -227,9 +242,17 @@ class ScanResult:
         return dict(sorted(grouped.items()))
 
     def convergence_groups(self) -> list[ConvergenceGroup]:
-        """Cross-system duplicates, in wave then group order."""
+        """Cross-system duplicates, in wave then group order.
+
+        Grouped over the whole estate, then narrowed to the groups the
+        current view can see. Grouping over a `--system` view instead
+        would leave one member in every group, so nothing would be
+        cross-system and the report would flag each object as a
+        duplicate while stating that no duplicates exist.
+        """
+        visible = {obj.path for obj in self.objects}
         grouped: dict[str, ConvergenceGroup] = {}
-        for obj in self.objects:
+        for obj in self.estate if self.estate is not None else self.objects:
             if not obj.convergence_group:
                 continue
             group = grouped.setdefault(
@@ -237,7 +260,12 @@ class ScanResult:
             )
             group.objects.append(obj)
         return sorted(
-            (group for group in grouped.values() if group.is_cross_system),
+            (
+                group
+                for group in grouped.values()
+                if group.is_cross_system
+                and any(obj.path in visible for obj in group.objects)
+            ),
             key=lambda group: (group.wave, group.group_id),
         )
 

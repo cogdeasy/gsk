@@ -89,7 +89,12 @@ cleared. The backlog lists those two separately, and `SI-CONV-001`
 still fires on the object that remains.
 
 Use `--system GEP` or `--system GVP` to scan one estate at a time, for
-example when a workstream owns only one of them.
+example when a workstream owns only one of them. The convergence
+groups are worked out over the whole estate and then narrowed to the
+ones the view can see, so a single-system scan still shows the
+duplication its own objects are flagged for. The days shown are the
+whole group's - a programme saving realised once, not something either
+system can bank on its own - and the report says so.
 
 ## Interfaces that disappear
 

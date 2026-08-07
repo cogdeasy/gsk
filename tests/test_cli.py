@@ -44,6 +44,28 @@ def test_s4scan_system_filter_restricts_the_scan(capsys):
     assert "GEP" not in vaccines_only
 
 
+def test_a_single_system_view_still_prices_the_duplication(capsys):
+    """One estate cannot see its own duplication dissolve.
+
+    A convergence group is cross-system by definition, so grouping over
+    the filtered objects would leave one member in each and report that
+    nothing is duplicated - while the same output flags every one of
+    those objects with SI-CONV-001.
+    """
+    s4scan_cli.main(["scan", "abap/ecc"])
+    both = capsys.readouterr().out
+
+    s4scan_cli.main(["scan", "abap/ecc", "--system", "GVP"])
+    vaccines_only = capsys.readouterr().out
+
+    groups = "convergence groups    : 4"
+    assert groups in both
+    assert groups in vaccines_only
+    # The days belong to the group, not to the system looking at it.
+    assert "not this view's" in vaccines_only
+    assert "not this view's" not in both
+
+
 def test_s4scan_summary_reports_the_merge(capsys):
     s4scan_cli.main(["scan", "abap/ecc"])
     output = capsys.readouterr().out
