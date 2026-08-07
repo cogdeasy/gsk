@@ -160,6 +160,28 @@ def test_s4scan_summary_reports_the_merge(capsys):
     assert "decommissioned" in output
 
 
+def test_s4scan_summary_accounts_for_every_duplication_it_flags(capsys):
+    """A group whose counterpart is built is priced nowhere.
+
+    It still raises SI-CONV-001, so on the priced count alone the
+    summary looks like it has mislaid a group, and only the markdown
+    report says otherwise.
+    """
+    s4scan_cli.main(["scan", "abap/ecc"])
+    output = capsys.readouterr().out
+    groups = {
+        line.split(":", 1)[0].strip(): int(line.split(":", 1)[1].split()[0])
+        for line in output.splitlines()
+        if line.startswith(("convergence groups", "groups already built"))
+    }
+    assert groups["groups already built"] > 0
+    duplications = next(
+        int(line.split()[1]) for line in output.splitlines()
+        if line.strip().startswith("SI-CONV-001")
+    )
+    assert duplications > groups["convergence groups"]
+
+
 def test_s4scan_writes_a_report(tmp_path, capsys):
     out_file = tmp_path / "backlog.md"
     exit_code = s4scan_cli.main(

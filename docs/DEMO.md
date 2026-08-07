@@ -47,6 +47,8 @@ source systems:
   GVP     8 objects,   7 outstanding
 
 convergence groups    : 4 (46.5 engineer-days avoided by building one object)
+groups already built  : 2 (CG-MM-BATCHGEN, CG-MM-STOCK)
+                        the saving on these is already taken
 ```
 
 GSK Vaccines runs a separate ECC instance, and both land in one

@@ -1330,6 +1330,45 @@ def test_two_systems_supplying_one_batch_is_caught(result):
     assert "REC-STK-KEY" in {check.id for check in broken.failed_checks}
 
 
+def test_a_number_reused_across_record_types_breaks_the_cross_reference():
+    """REC-BP-003 is the one partner check real data can fail.
+
+    The cross reference is keyed on system and number with no record
+    type, so a customer and a vendor holding number 210045 in the same
+    system write one entry over the other and a migrated record loses
+    its link to its business partner. Nothing else in the pack sees it:
+    the counts balance, because both records are accepted and both
+    partners are created.
+    """
+    from datamig import mapping, reconcile
+
+    def _partner(number_field: str, number: str, name: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", number_field: number, "NAME1": name,
+            "LAND1": "GB", "PSTLZ": "SW1", "ORT01": "LONDON",
+            "STRAS": "1 HIGH ST", "STCEG": "", "BUKRS": "GB01",
+        }
+
+    partners = mapping.convert_to_business_partners(
+        [_partner("KUNNR", "0000210045", "NHS SUPPLY CHAIN")],
+        [_partner("LIFNR", "0000210045", "LONZA AG")],
+    )
+    outcome = reconcile.build(
+        wave="wave0",
+        counts=[],
+        accepted_open_items=[],
+        loaded_open_items=[],
+        accepted_stock=[],
+        loaded_stock=[],
+        accepted_partners=2,
+        partner_identities=len(partners.partners),
+        business_partners=len(partners.partners),
+        merged_partners=partners.merged_count,
+        xref=partners.xref,
+    )
+    assert "REC-BP-003" in {check.id for check in outcome.failed_checks}
+
+
 def test_the_printed_record_arithmetic_is_checked(result):
     """The report asserts extracted - rejected - merged = loaded."""
     from datamig import reconcile

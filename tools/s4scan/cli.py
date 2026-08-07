@@ -13,6 +13,7 @@ from .report import (
     convergence_estimates,
     count_by_rule,
     count_by_severity,
+    groups_with_built_counterpart,
     to_json,
     to_markdown,
 )
@@ -190,6 +191,20 @@ def _summary(result) -> str:
                 "                        whole-group days; the saving is "
                 "the programme's, not this view's"
             )
+
+    # A group whose counterpart is already built is still a duplication
+    # and still raises SI-CONV-001, but there is no saving left to take.
+    # Unsaid, the findings outnumber the priced groups and the summary
+    # looks like it has lost some.
+    settled = groups_with_built_counterpart(result)
+    if settled:
+        lines.append(
+            f"groups already built  : {len(settled)} "
+            f"({', '.join(group.group_id for group in settled)})"
+        )
+        lines.append(
+            "                        the saving on these is already taken"
+        )
 
     # SI-CONV-001 fires from the inventory, so a scan of part of the
     # estate flags a duplication it cannot cost. Saying nothing leaves

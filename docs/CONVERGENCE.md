@@ -74,6 +74,8 @@ The order has to be fit-gap, then one build.
 
 ```
 convergence groups    : 4 (46.5 engineer-days avoided by building one object)
+groups already built  : 2 (CG-MM-BATCHGEN, CG-MM-STOCK)
+                        the saving on these is already taken
 ```
 
 The estimate is the difference between remediating every member
