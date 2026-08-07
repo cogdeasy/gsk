@@ -80,6 +80,17 @@ class ConvergenceEstimate:
     @classmethod
     def from_group(cls, group: ConvergenceGroup) -> ConvergenceEstimate:
         outstanding = group.outstanding
+        # A group with nothing left to build has no estimate to give,
+        # and a zero would read as a merge that saves nothing rather
+        # than as one already taken. Said here rather than left to the
+        # caller, where it currently is: without it the failure is
+        # `max() arg is an empty sequence`, which names neither the
+        # group nor the reason.
+        if not outstanding:
+            raise ValueError(
+                f"{group.group_id} has no outstanding members to estimate; "
+                "it is already built or decommissioned"
+            )
         member_days = [_days(obj.weighted_effort_points) for obj in outstanding]
         independent = sum(member_days)
         multiplier = max(obj.validation_multiplier for obj in outstanding)

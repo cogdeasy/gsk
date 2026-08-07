@@ -42,7 +42,7 @@
       "rejected": 2,
       "merged": 0,
       "loaded": 23,
-      "warnings": 9
+      "warnings": 8
     },
     {
       "object": "vendors",
@@ -50,7 +50,7 @@
       "rejected": 1,
       "merged": 0,
       "loaded": 20,
-      "warnings": 11
+      "warnings": 9
     },
     {
       "object": "open_items",
@@ -66,7 +66,7 @@
       "rejected": 11,
       "merged": 0,
       "loaded": 21,
-      "warnings": 10
+      "warnings": 8
     }
   ],
   "checks": [

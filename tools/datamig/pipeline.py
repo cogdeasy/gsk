@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import cleanse, extract, load, mapping, reconcile
-from .cleanse import Action, CleanseResult
+from .cleanse import CleanseResult
 from .identity import (
     material_key,
     material_lookup_key,
@@ -50,7 +50,10 @@ class PipelineResult:
 
 
 def _warnings(result: CleanseResult) -> int:
-    return result.counts_by_action()[Action.WARN.value]
+    # Only the ones on records that load. The rest are in the exception
+    # pack against a record the wave holds back, so counting them here
+    # would put work in the reconciliation table that cannot be done.
+    return len(result.warnings_on_loaded())
 
 
 def _keys(rows: list[dict[str, str]], *fields: str) -> frozenset[str]:

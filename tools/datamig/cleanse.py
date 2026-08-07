@@ -121,6 +121,32 @@ class CleanseResult:
     def issues_for(self, rule_id: str) -> list[Issue]:
         return [issue for issue in self.issues if issue.rule_id == rule_id]
 
+    def held_keys(self) -> set[str]:
+        """Every key a reject names, as the exception pack spells it."""
+        return {
+            key.strip()
+            for issue in self.issues
+            if issue.action is Action.REJECT
+            for key in issue.key.split(",")
+        }
+
+    def warnings_on_loaded(self) -> list[Issue]:
+        """Warnings against records that actually reach the target.
+
+        A warning on a held record is still true and still shipped in
+        the exception pack - it comes back the day the reject is
+        settled - but it is not something anyone can do anything about
+        in this wave, and counting it as outstanding tells a steward
+        there is work on data that does not exist yet.
+        """
+        held = self.held_keys()
+        return [
+            issue
+            for issue in self.issues
+            if issue.action is Action.WARN
+            and not all(key.strip() in held for key in issue.key.split(","))
+        ]
+
 
 def _row_key(row: dict[str, str]) -> tuple[str, str]:
     """The key a harmonisation decision is matched on. See `identity`."""

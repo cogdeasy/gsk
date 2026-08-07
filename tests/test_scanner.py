@@ -65,6 +65,17 @@ def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
     ))
 
 
+def test_a_group_with_nothing_left_to_build_has_no_estimate():
+    """`max()` over no members says nothing about which group broke."""
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    group = next(
+        group for group in result.convergence_groups()
+        if not group.outstanding
+    )
+    with pytest.raises(ValueError, match=group.group_id):
+        report.ConvergenceEstimate.from_group(group)
+
+
 def test_a_counterpart_being_switched_off_is_not_a_duplication(tmp_path):
     """Nothing to converge with, so SI-CONV-001 must not fire.
 

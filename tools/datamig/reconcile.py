@@ -627,6 +627,13 @@ def to_markdown(reconciliation: Reconciliation) -> str:
         "records, and are counted in `REC-MRG-001` below."
     )
     lines.append("")
+    lines.append(
+        "`Warnings` counts only the records that load. A warning on a "
+        "held record is in the exception pack and comes back when the "
+        "reject is settled, but there is nothing to do about it while "
+        "the record is out of the wave."
+    )
+    lines.append("")
     lines.append("| Object | Extracted | Rejected | Merged | Loaded | Warnings |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for count in reconciliation.counts:

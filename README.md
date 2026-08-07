@@ -145,10 +145,10 @@ The merge is where two sources become one client:
 ```
 object         extracted  rejected  merged  loaded   warn
 materials             31         6       3      22      2
-customers             25         2       0      23      9
-vendors               21         1       0      20     11
+customers             25         2       0      23      8
+vendors               21         1       0      20      9
 open_items            42         6       0      36      1
-batch_stock           32        11       0      21     10
+batch_stock           32        11       0      21      8
 
 business partners created: 33 (merged 10 source records, 7 held in both systems)
 products created: 22 (harmonised 3 duplicate materials away)

@@ -1150,6 +1150,34 @@ def test_an_extract_that_names_another_system_is_refused(tmp_path):
     assert extract.read_csv(path, "materials", "GVP").rows[0]["SOURCE_SYSTEM"] == "GVP"
 
 
+def test_a_warning_on_a_held_record_is_not_counted_as_outstanding(result):
+    """The exception pack keeps it; the wave table does not count it.
+
+    Quality inspection stock needs a usage decision before go-live -
+    but not on a batch the wave is holding back, where the decision to
+    take is the one that releases the material. Counted, the table
+    reads as work on data that will not exist at cutover.
+    """
+    stock = result.cleansing["batch_stock"]
+    held = stock.held_keys()
+    assert held
+
+    warnings = stock.issues_for("DQ-STK-004") + stock.issues_for("DQ-STK-003")
+    assert any(warning.key in held for warning in warnings), (
+        "fixture no longer has a warning on a rejected batch"
+    )
+    counted = {issue.key for issue in stock.warnings_on_loaded()}
+    assert not counted & held
+    # And still shipped, so the steward sees it when the reject clears.
+    assert {warning.key for warning in warnings} & held
+
+    batch_stock = next(
+        count for count in result.reconciliation.counts
+        if count.object_name == "batch_stock"
+    )
+    assert batch_stock.warnings == len(stock.warnings_on_loaded())
+
+
 def test_reconciliation_counts_each_source_system(result):
     by_system = result.reconciliation.accepted_by_system
     assert set(result.reconciliation.source_systems) == {"GEP", "GVP"}
