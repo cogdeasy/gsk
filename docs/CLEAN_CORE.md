@@ -2,7 +2,7 @@
 
 What "remediated" means in this repository, rule by rule. The worked
 example is `abap/remediated/`: the same stock overview report as
-`abap/src/mm/zgsk_mm_stock_overview.prog.abap`, rebuilt.
+`abap/ecc/gep/mm/zgsk_mm_stock_overview.prog.abap`, rebuilt.
 
 ## Principles
 

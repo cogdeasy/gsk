@@ -1,0 +1,5 @@
+SOURCE_SYSTEM,MATNR,TARGET_PRODUCT,DECISION,NOTE
+GVP,000000000000700301,100251,merge,Same antigen bulk specification as the core record; core number survives
+GVP,000000000000700302,100236,merge,Identical finished vaccine; Wavre record retired in favour of the core number
+GVP,000000000000700303,100250,merge,Identical finished vaccine; Wavre record retired in favour of the core number
+GVP,000000000000700310,100244,merge,Same investigational RSV vial registered twice during the joint programme

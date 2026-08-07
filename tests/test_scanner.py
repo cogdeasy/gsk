@@ -7,7 +7,7 @@ from s4scan.rules import RuleFilter, Severity
 from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LEGACY = REPO_ROOT / "abap" / "src"
+LEGACY = REPO_ROOT / "abap" / "ecc"
 REMEDIATED = REPO_ROOT / "abap" / "remediated"
 INVENTORY = REPO_ROOT / "estate" / "inventory.csv"
 
@@ -61,14 +61,102 @@ def test_remediation_moves_findings_from_outstanding_to_cleared():
     summary = payload["summary"]
 
     cleared = [obj for obj in result.remediated() if obj.findings]
+    # An object with findings is either still to do, already remediated,
+    # or dropped at the merge - the three are exhaustive and disjoint.
+    decommissioned = [
+        obj for obj in result.decommissioned()
+        if obj.findings and not obj.is_remediated
+    ]
     assert summary["outstanding_findings"] < summary["findings"]
-    assert summary["objects_outstanding"] + len(cleared) == (
+    assert summary["objects_outstanding"] + len(cleared) + len(decommissioned) == (
         summary["objects_with_findings"]
     )
     assert payload["cleared_effort"]["engineer_days"] > 0
     assert {item["object_name"] for item in payload["remediated"]} == {
         obj.object_name for obj in result.remediated()
     }
+
+
+def test_every_object_belongs_to_a_source_system():
+    inventory = load_inventory()
+    assert set(inventory.source_systems()) == {"GEP", "GVP"}
+    for entry in inventory:
+        expected = f"abap/ecc/{entry.source_system.lower()}/"
+        assert entry.path.startswith(expected), entry.object_name
+
+
+def test_scan_carries_the_source_system_through():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    by_system = result.by_source_system()
+    assert set(by_system) == {"GEP", "GVP"}
+    assert all(by_system.values())
+    assert sum(len(objects) for objects in by_system.values()) == len(result.objects)
+
+
+def test_convergence_groups_pair_the_two_systems():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    groups = result.convergence_groups()
+    assert groups
+    for group in groups:
+        assert group.source_systems == ["GEP", "GVP"]
+        assert len(group.objects) > 1
+
+
+def test_duplicated_function_is_raised_against_both_implementations():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    flagged = {
+        obj.object_name: obj
+        for obj in result.objects
+        if any(finding.rule.id == "SI-CONV-001" for finding in obj.findings)
+    }
+    assert flagged
+
+    group = next(
+        group for group in result.convergence_groups()
+        if not group.is_remediated and not group.is_decommissioned
+    )
+    for obj in group.objects:
+        assert obj.object_name in flagged
+
+
+def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    dropped = [
+        group for group in result.convergence_groups() if group.is_decommissioned
+    ]
+    assert dropped
+    for group in dropped:
+        for obj in group.objects:
+            rule_ids = {finding.rule.id for finding in obj.findings}
+            assert "SI-CONV-001" not in rule_ids
+
+
+def test_objects_dropped_at_the_merge_are_not_in_the_backlog():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    decommissioned = result.decommissioned()
+    assert decommissioned
+    assert all(obj.findings for obj in decommissioned)
+
+    backlog = {obj.object_name for obj in report.build_backlog(result)}
+    outstanding = {obj.object_name for obj in result.outstanding()}
+    for obj in decommissioned:
+        assert obj.object_name not in backlog
+        assert obj.object_name not in outstanding
+
+
+def test_convergence_estimate_is_cheaper_than_remediating_both():
+    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    estimates = report.convergence_estimates(result)
+    assert estimates
+    assert {estimate.group_id for estimate in estimates} == {
+        group.group_id
+        for group in result.convergence_groups()
+        if not group.is_remediated and not group.is_decommissioned
+    }
+    for estimate in estimates:
+        assert estimate.source_systems == ("GEP", "GVP")
+        assert estimate.converged_days < estimate.independent_days
+        assert estimate.avoided_days > 0
 
 
 def test_every_legacy_source_is_in_the_inventory():
@@ -93,7 +181,7 @@ def test_remediated_reference_is_clean():
 
 def test_stock_overview_findings_name_the_expected_rules():
     result = scan_file(
-        LEGACY / "mm" / "zgsk_mm_stock_overview.prog.abap",
+        LEGACY / "gep" / "mm" / "zgsk_mm_stock_overview.prog.abap",
         inventory=load_inventory(),
         test_roots=[REPO_ROOT / "abap"],
     )

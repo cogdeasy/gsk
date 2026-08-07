@@ -4,7 +4,7 @@ import pytest
 
 from datamig import cleanse, extract, mapping, pipeline
 from datamig.cleanse import Action
-from datamig.identity import partner_identity
+from datamig.identity import partner_identity, source_key
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WAVE0 = REPO_ROOT / "data" / "wave0"
@@ -23,6 +23,37 @@ def test_extract_reads_every_wave_object():
     assert all(len(dataset) > 0 for dataset in datasets.values())
 
 
+def test_extract_reads_both_source_systems():
+    datasets = extract.extract_wave(WAVE0)
+    for dataset in datasets.values():
+        systems = {row["SOURCE_SYSTEM"] for row in dataset.rows}
+        assert systems == set(extract.SOURCE_SYSTEMS)
+        assert dataset.for_system("GVP")
+
+
+def test_extract_raises_when_a_source_system_is_absent(tmp_path):
+    for filename in extract.EXTRACT_FILES.values():
+        path = tmp_path / "gep" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    with pytest.raises(extract.ExtractError, match="GVP"):
+        extract.extract_wave(tmp_path)
+
+
+def test_the_same_number_in_both_systems_is_two_records(result):
+    customers = result.cleansing["customers"]
+    clashing = [row for row in customers.accepted if row["KUNNR"] == "0000210045"]
+    assert {row["SOURCE_SYSTEM"] for row in clashing} == {"GEP", "GVP"}
+    assert len({row["NAME1"] for row in clashing}) == 2
+
+    bps = {
+        result.business_partners.xref[source_key(row, "KUNNR")]
+        for row in clashing
+    }
+    assert len(bps) == 2
+
+
 def test_extract_raises_for_a_missing_wave(tmp_path):
     with pytest.raises(extract.ExtractError):
         extract.extract_wave(tmp_path / "nope")
@@ -31,6 +62,7 @@ def test_extract_raises_for_a_missing_wave(tmp_path):
 def test_lower_case_base_unit_is_repaired():
     rows = [
         {
+            "SOURCE_SYSTEM": "GEP",
             "MATNR": "1", "MTART": "FERT", "MATKL": "X", "MEINS": "st",
             "BRGEW": "1.0", "GEWEI": "KG", "SPART": "01", "XCHPF": "X",
             "MHDHB": "365", "ZZ_TEMP_CLASS": "15-25C", "MAKTX": "TEST",
@@ -51,12 +83,24 @@ def test_batch_managed_material_without_shelf_life_is_rejected(result):
 
 def test_invalid_country_code_is_rejected(result):
     customers = result.cleansing["customers"]
-    assert {row["KUNNR"] for row in customers.rejected} == {"0000210060"}
+    rejected = {
+        source_key(row, "KUNNR")
+        for row in customers.rejected
+        if any(
+            issue.rule_id == "DQ-CUS-003"
+            and issue.key == source_key(row, "KUNNR")
+            for issue in customers.issues
+        )
+    }
+    assert rejected == {"GEP/0000210060"}
 
 
 def test_unbalanced_document_is_rejected(result):
     issues = result.cleansing["open_items"].issues_for("DQ-FI-001")
-    assert [issue.key for issue in issues] == ["IE01/4900000772/2026"]
+    assert sorted(issue.key for issue in issues) == [
+        "GEP/IE01/4900000772/2026",
+        "GVP/BE02/1900008805/2026",
+    ]
 
 
 def test_open_item_for_an_unknown_partner_is_rejected(result):
@@ -68,6 +112,80 @@ def test_stock_for_a_rejected_material_does_not_load(result):
     loaded_products = {row["Product"] for row in result.products}
     for row in result.stock:
         assert row["Product"] in loaded_products
+
+
+def test_a_partner_held_in_both_systems_becomes_one_business_partner(result):
+    unicef = next(
+        partner
+        for partner in result.business_partners.partners
+        if partner.name == "UNICEF SUPPLY DIVISION"
+    )
+    assert unicef.source_customers == ["GEP/0000210050", "GVP/0000210112"]
+    assert unicef.source_systems == {"GEP", "GVP"}
+    assert unicef.is_cross_system
+
+
+def test_cross_system_partners_are_reported_as_merge_evidence(result):
+    cross_system = result.business_partners.cross_system_partners
+    assert cross_system
+    assert all(partner.is_cross_system for partner in cross_system)
+    names = {partner.name for partner in cross_system}
+    assert {"UNICEF SUPPLY DIVISION", "PAHO REVOLVING FUND"} <= names
+
+
+def test_a_number_reused_across_systems_raises_a_collision_warning(result):
+    issues = result.cleansing["customers"].issues_for("DQ-CUS-008")
+    assert issues
+    assert "0000210045" in issues[0].message
+    assert issues[0].action is Action.WARN
+
+
+def test_harmonised_materials_collapse_into_one_product(result):
+    products = {row["Product"] for row in result.products}
+    xref = result.product_result.xref
+
+    # The Wavre record for the same finished vaccine is retired, and
+    # resolves to the surviving core product rather than its own number.
+    assert xref["GVP/000000000000700302"] == "100236"
+    assert "100236" in products
+    assert "700302" not in products
+
+
+def test_every_source_material_stays_resolvable_after_the_merge(result):
+    accepted = result.cleansing["materials"].accepted
+    xref = result.product_result.xref
+    loaded = {row["Product"] for row in result.products}
+    for row in accepted:
+        assert xref[source_key(row, "MATNR")] in loaded
+
+
+def test_a_merge_onto_a_rejected_product_is_held_back(result):
+    materials = result.cleansing["materials"]
+    orphaned = materials.issues_for("DQ-MAT-010")
+    assert [issue.key for issue in orphaned] == ["GVP/000000000000700301"]
+    assert orphaned[0].action is Action.REJECT
+    assert "GVP/000000000000700301" not in result.product_result.xref
+
+
+def test_stock_from_both_systems_lands_on_the_harmonised_product(result):
+    rows = [row for row in result.stock if row["Product"] == "100236"]
+    assert {row["SourceSystem"] for row in rows} == {"GEP", "GVP"}
+
+
+def test_the_merge_arithmetic_is_reconciled(result):
+    checks = {check.id: check for check in result.reconciliation.checks}
+    for check_id in ("REC-MRG-001", "REC-MRG-002", "REC-MRG-003"):
+        assert checks[check_id].passed, check_id
+
+
+def test_reconciliation_counts_each_source_system(result):
+    by_system = result.reconciliation.accepted_by_system
+    assert set(result.reconciliation.source_systems) == {"GEP", "GVP"}
+    for object_name, counts in by_system.items():
+        assert set(counts) == {"GEP", "GVP"}, object_name
+        assert sum(counts.values()) == len(
+            result.cleansing[object_name].accepted
+        )
 
 
 def test_material_number_loses_its_leading_zeros():
@@ -99,8 +217,10 @@ def test_duplicate_vendor_across_company_codes_is_one_partner(result):
         for partner in result.business_partners.partners
         if partner.name == "LONZA AG"
     )
-    assert lonza.source_vendors == ["0000510012", "0000510020"]
-    assert lonza.company_codes == {"GB01", "BE01"}
+    assert lonza.source_vendors == [
+        "GEP/0000510012", "GEP/0000510020", "GVP/0000510032",
+    ]
+    assert lonza.company_codes == {"GB01", "BE01", "BE02"}
 
 
 def test_merge_warnings_describe_the_merges_the_load_performs(result):
@@ -116,7 +236,7 @@ def test_merge_warnings_describe_the_merges_the_load_performs(result):
         }
         accepted = cleansed.accepted
         merged = {
-            row[key_field]
+            source_key(row, key_field)
             for row in accepted
             if sum(
                 1 for other in accepted
@@ -131,9 +251,9 @@ def test_every_migrated_partner_has_a_cross_reference(result):
     vendors = result.cleansing["vendors"].accepted
     xref = result.business_partners.xref
     for row in customers:
-        assert row["KUNNR"] in xref
+        assert source_key(row, "KUNNR") in xref
     for row in vendors:
-        assert row["LIFNR"] in xref
+        assert source_key(row, "LIFNR") in xref
 
 
 def test_open_items_carry_the_business_partner_number(result):
@@ -181,6 +301,7 @@ def test_reconciliation_detects_a_value_break(result):
         business_partners=len(result.business_partners.partners),
         merged_partners=result.business_partners.merged_count,
         xref=result.business_partners.xref,
+        products=result.product_result,
     )
     assert not broken.passed
     assert any(check.id.startswith("REC-FI-VAL") for check in broken.failed_checks)
@@ -190,25 +311,32 @@ def test_pipeline_writes_the_expected_artefacts(tmp_path):
     outcome = pipeline.run(wave="wave0", source_dir=WAVE0, out_dir=tmp_path)
     written = {path.name for path in outcome.written}
     assert "s4_product.csv" in written
+    assert "s4_product_xref.csv" in written
     assert "s4_business_partner_xref.csv" in written
     assert "reconciliation.md" in written
     assert (tmp_path / "rejected_materials.csv").exists()
 
 
 def test_stock_base_unit_comes_from_the_material_master():
-    material = {"MATNR": "000000000000100001", "MEINS": "KG", "ZZ_TEMP_CLASS": "C2"}
+    material = {
+        "SOURCE_SYSTEM": "GEP", "MATNR": "000000000000100001",
+        "MEINS": "KG", "ZZ_TEMP_CLASS": "C2",
+    }
     stock = {
+        "SOURCE_SYSTEM": "GEP",
         "MATNR": "000000000000100001", "WERKS": "GB21", "LGORT": "0001",
         "CHARG": "B1", "CLABS": "1.000", "CINSM": "0.000", "CSPEM": "0.000",
         "MEINS": "st", "VFDAT": "", "HSDAT": "", "ZUSTD": "",
     }
-    row = mapping.map_stock(stock, {material["MATNR"]: material})
+    row = mapping.map_stock(stock, {source_key(material, "MATNR"): material})
     assert row["BaseUnit"] == "KGM"
 
 
 def test_stock_in_a_different_unit_from_the_master_is_held_back(result):
     rejected = result.cleansing["batch_stock"].issues_for("DQ-STK-005")
-    assert [issue.key for issue in rejected] == ["IE41/000000000000100246/B2500401"]
+    assert [issue.key for issue in rejected] == [
+        "GEP/IE41/000000000000100246/B2500401"
+    ]
     assert all(
         row["Product"] != "100246" or row["Plant"] != "IE41" for row in result.stock
     )

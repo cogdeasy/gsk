@@ -6,12 +6,19 @@ import argparse
 import sys
 from pathlib import Path
 
-from .inventory import Inventory
-from .report import build_backlog, count_by_rule, count_by_severity, to_json, to_markdown
+from .inventory import SOURCE_SYSTEMS, Inventory
+from .report import (
+    build_backlog,
+    convergence_estimates,
+    count_by_rule,
+    count_by_severity,
+    to_json,
+    to_markdown,
+)
 from .rules import RuleFilter, Severity, all_rules
 from .scanner import scan
 
-DEFAULT_SOURCE = "abap/src"
+DEFAULT_SOURCE = "abap/ecc"
 DEFAULT_INVENTORY = "estate/inventory.csv"
 
 
@@ -44,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--out", help="write the report to this file")
     scan_parser.add_argument(
         "--wave", help="restrict the scan to objects in this wave",
+    )
+    scan_parser.add_argument(
+        "--system", choices=sorted(SOURCE_SYSTEMS),
+        help="restrict the scan to one ECC source system",
     )
     scan_parser.add_argument(
         "--rule", action="append", default=[], help="only run these rule ids",
@@ -95,6 +106,11 @@ def _run_scan(args: argparse.Namespace) -> int:
     if args.wave:
         result.objects = [obj for obj in result.objects if obj.wave == args.wave]
 
+    if args.system:
+        result.objects = [
+            obj for obj in result.objects if obj.source_system == args.system
+        ]
+
     if args.format == "json":
         output = to_json(result)
     elif args.format == "markdown":
@@ -125,15 +141,42 @@ def _run_scan(args: argparse.Namespace) -> int:
 def _summary(result) -> str:
     backlog = build_backlog(result)
     counts = count_by_severity(backlog)
+    decommissioned = result.decommissioned()
     lines = [
-        f"objects scanned      : {len(result.objects)}",
-        f"objects remediated   : {len(result.remediated())}",
-        f"objects outstanding  : {len(backlog)}",
-        f"effective LOC        : {result.scanned_loc}",
-        f"findings outstanding : {sum(len(obj.findings) for obj in backlog)}",
+        f"objects scanned       : {len(result.objects)}",
+        f"objects remediated    : {len(result.remediated())}",
+        f"objects decommissioned: {len(decommissioned)}",
+        f"objects outstanding   : {len(backlog)}",
+        f"effective LOC         : {result.scanned_loc}",
+        f"findings outstanding  : {sum(len(obj.findings) for obj in backlog)}",
     ]
     for severity, count in counts.items():
         lines.append(f"  {severity:<9}: {count}")
+
+    by_system = {
+        system: objects
+        for system, objects in result.by_source_system().items()
+        if system in SOURCE_SYSTEMS
+    }
+    if by_system:
+        lines.append("")
+        lines.append("source systems:")
+        for system, objects in by_system.items():
+            outstanding = [obj for obj in backlog if obj.source_system == system]
+            lines.append(
+                f"  {system:<5} {len(objects):>3} objects, "
+                f"{len(outstanding):>3} outstanding"
+            )
+
+    convergence = convergence_estimates(result)
+    if convergence:
+        avoided = round(sum(e.avoided_days for e in convergence), 1)
+        lines.append("")
+        lines.append(
+            f"convergence groups    : {len(convergence)} "
+            f"({avoided} engineer-days avoided by building one object)"
+        )
+
     lines.append("")
     lines.append("top rules:")
     for rule_id, count in list(count_by_rule(backlog).items())[:10]:

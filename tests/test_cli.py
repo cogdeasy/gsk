@@ -21,7 +21,7 @@ def test_s4scan_rules_command_lists_the_catalogue(capsys):
 
 
 def test_s4scan_fail_on_blocker_gates_the_legacy_estate(capsys):
-    exit_code = s4scan_cli.main(["scan", "abap/src", "--fail-on", "blocker"])
+    exit_code = s4scan_cli.main(["scan", "abap/ecc", "--fail-on", "blocker"])
     capsys.readouterr()
     assert exit_code == 1
 
@@ -32,10 +32,29 @@ def test_s4scan_passes_on_the_remediated_reference(capsys):
     assert exit_code == 0
 
 
+def test_s4scan_system_filter_restricts_the_scan(capsys):
+    s4scan_cli.main(["scan", "abap/ecc"])
+    both = capsys.readouterr().out
+
+    s4scan_cli.main(["scan", "abap/ecc", "--system", "GVP"])
+    vaccines_only = capsys.readouterr().out
+
+    assert "GEP" in both and "GVP" in both
+    assert "GVP" in vaccines_only
+    assert "GEP" not in vaccines_only
+
+
+def test_s4scan_summary_reports_the_merge(capsys):
+    s4scan_cli.main(["scan", "abap/ecc"])
+    output = capsys.readouterr().out
+    assert "convergence groups" in output
+    assert "decommissioned" in output
+
+
 def test_s4scan_writes_a_report(tmp_path, capsys):
     out_file = tmp_path / "backlog.md"
     exit_code = s4scan_cli.main(
-        ["scan", "abap/src", "--format", "markdown", "--out", str(out_file)]
+        ["scan", "abap/ecc", "--format", "markdown", "--out", str(out_file)]
     )
     capsys.readouterr()
     assert exit_code == 0

@@ -114,6 +114,28 @@ def test_commented_code_is_never_flagged():
     assert parsed.statements == []
 
 
+def test_object_rules_never_match_a_statement():
+    # SI-CONV-001 and SI-GXP-001 are properties of the object's place in
+    # the estate, not of any line in it. Matching a statement would make
+    # them fire on whichever file happened to contain the wording.
+    for rule_id in ("SI-CONV-001", "SI-GXP-001"):
+        rule = RULES_BY_ID[rule_id]
+        assert rule.tables == ()
+        for source in (
+            "SELECT * FROM mard INTO TABLE gt_stock.",
+            "MODIFY kna1 FROM ls_kna1.",
+            "CALL FUNCTION 'Z_BIO_CONVERGENCE'.",
+        ):
+            assert rule.evidence(statement_for(source)) is None
+
+
+def test_convergence_rule_names_the_consolidation_decision():
+    rule = RULES_BY_ID["SI-CONV-001"]
+    assert rule.severity is Severity.CRITICAL
+    assert "fit-gap" in rule.guidance
+    assert "consolidation" in rule.sap_reference.lower()
+
+
 def test_rule_ids_are_unique_and_documented():
     rules = all_rules()
     assert len({rule.id for rule in rules}) == len(rules)

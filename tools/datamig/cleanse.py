@@ -5,6 +5,12 @@ raise an exception for the data steward (``WARN``), or hold the record
 back from the load (``REJECT``). Nothing is silently dropped: every
 rejected record appears in the exception file and in the reconciliation
 report, which is what the cutover sign-off needs.
+
+Records arrive from both ECC systems in one pass, so the rules that
+look across records - duplicate descriptions, partners that merge -
+see the whole estate rather than one system at a time. That is the
+point: the duplicates worth finding are the ones that only exist
+because the same counterparty or product is mastered twice.
 """
 
 from __future__ import annotations
@@ -14,12 +20,18 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
 
-from .identity import PartnerIdentity, partner_identity
+from .identity import (
+    PartnerIdentity,
+    partner_identity,
+    source_key,
+    strip_leading_zeros,
+)
 
 ISO_COUNTRIES = {
     "GB", "DE", "FR", "BE", "IE", "US", "DK", "TZ", "SG", "CH",
     "MX", "CN", "IT", "ES", "NL", "PL", "JP", "IN", "BR", "CA",
     "AU", "ZA", "KE", "CO", "SE", "NO", "FI", "AT", "PT", "GR",
+    "ID", "PH", "VN", "TH", "NG", "GH", "ET", "SN", "BD", "PK",
 }
 
 # ECC base unit -> ISO unit expected by the S/4HANA load.
@@ -92,12 +104,24 @@ def _issue(rule_id, action, object_name, key, field_name, message) -> Issue:
     )
 
 
-def cleanse_materials(rows: list[dict[str, str]]) -> CleanseResult:
+def cleanse_materials(
+    rows: list[dict[str, str]],
+    harmonisation_targets: dict[tuple[str, str], str] | None = None,
+) -> CleanseResult:
+    """Cleanse the material master from both systems.
+
+    ``harmonisation_targets`` maps (source system, material) to the
+    product number the material is to be merged into. It is needed here
+    rather than only in mapping because a merge inherits the quality of
+    its target: if the surviving record is rejected, the record that was
+    to be retired has nowhere to land.
+    """
     result = CleanseResult(object_name="materials")
     descriptions: dict[str, list[str]] = defaultdict(list)
+    numbers: dict[str, list[str]] = defaultdict(list)
 
     for row in rows:
-        key = row["MATNR"]
+        key = source_key(row, "MATNR")
         reject = False
 
         if row["MEINS"] and row["MEINS"] != row["MEINS"].upper():
@@ -154,16 +178,72 @@ def cleanse_materials(rows: list[dict[str, str]]) -> CleanseResult:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
+            numbers[row["MATNR"]].append(key)
 
     for description, keys in descriptions.items():
         if len(keys) > 1:
+            systems = {key.split("/")[0] for key in keys}
+            scope = (
+                "in both source systems" if len(systems) > 1
+                else f"within {next(iter(systems))}"
+            )
             result.issues.append(
                 _issue("DQ-MAT-008", Action.WARN, "materials", ", ".join(keys),
                        "MAKTX",
-                       f"duplicate material description '{description}'")
+                       f"duplicate material description '{description}' "
+                       f"{scope}, confirm the harmonisation decision")
             )
 
+    for number, keys in numbers.items():
+        if len({key.split("/")[0] for key in keys}) > 1:
+            result.issues.append(
+                _issue("DQ-MAT-009", Action.WARN, "materials", ", ".join(keys),
+                       "MATNR",
+                       f"material number {number} is used in both source "
+                       "systems; the target product number cannot be "
+                       "carried over from either")
+            )
+
+    if harmonisation_targets:
+        _reject_orphaned_merges(result, harmonisation_targets)
+
     return result
+
+
+def _reject_orphaned_merges(
+    result: CleanseResult, harmonisation_targets: dict[tuple[str, str], str]
+) -> None:
+    """Hold back merges whose surviving product did not itself survive.
+
+    Loading the retired material under its own number instead would
+    quietly reverse a governed decision and split the product's stock
+    and history across two numbers in the target, so the record waits
+    for the surviving master to be corrected.
+    """
+    surviving = {
+        strip_leading_zeros(row["MATNR"])
+        for row in result.accepted
+        if (row["SOURCE_SYSTEM"], row["MATNR"]) not in harmonisation_targets
+    }
+
+    orphaned = [
+        row for row in result.accepted
+        if (row["SOURCE_SYSTEM"], row["MATNR"]) in harmonisation_targets
+        and harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
+        not in surviving
+    ]
+
+    for row in orphaned:
+        target = harmonisation_targets[(row["SOURCE_SYSTEM"], row["MATNR"])]
+        result.accepted.remove(row)
+        result.rejected.append(row)
+        result.issues.append(
+            _issue("DQ-MAT-010", Action.REJECT, "materials",
+                   source_key(row, "MATNR"), "MATNR",
+                   f"harmonised into product {target}, which is not itself "
+                   "in the load; correct the surviving master or revisit "
+                   "the harmonisation decision")
+        )
 
 
 def cleanse_partners(
@@ -172,9 +252,10 @@ def cleanse_partners(
     result = CleanseResult(object_name=object_name)
     prefix = "DQ-CUS" if object_name == "customers" else "DQ-VEN"
     seen: dict[PartnerIdentity, list[str]] = defaultdict(list)
+    numbers: dict[str, list[tuple[str, PartnerIdentity]]] = defaultdict(list)
 
     for row in rows:
-        key = row[key_field]
+        key = source_key(row, key_field)
         reject = False
 
         if row["LAND1"] and row["LAND1"] != row["LAND1"].upper():
@@ -221,13 +302,37 @@ def cleanse_partners(
         else:
             result.accepted.append(row)
             seen[partner_identity(row)].append(key)
+            numbers[row[key_field]].append((key, partner_identity(row)))
 
     for identity, keys in seen.items():
         if len(keys) > 1:
+            systems = {key.split("/")[0] for key in keys}
+            scope = (
+                "across both source systems" if len(systems) > 1
+                else f"within {next(iter(systems))}"
+            )
             result.issues.append(
                 _issue(f"{prefix}-007", Action.WARN, object_name, ", ".join(keys),
                        "NAME1",
-                       f"records merge into one business partner: {identity[0]}")
+                       f"records merge into one business partner {scope}: "
+                       f"{identity[0]}")
+            )
+
+    # The two systems share number ranges. Where the same number holds
+    # different entities the merge must key on the entity, not the
+    # number, so the collision is reported before the load rather than
+    # discovered as a wrongly combined partner afterwards.
+    for number, entries in numbers.items():
+        keys = [key for key, _ in entries]
+        identities = {identity for _, identity in entries}
+        if len({key.split("/")[0] for key in keys}) > 1 and len(identities) > 1:
+            names = sorted(identity[0] for identity in identities)
+            result.issues.append(
+                _issue(f"{prefix}-008", Action.WARN, object_name, ", ".join(keys),
+                       key_field,
+                       f"number {number} exists in both source systems as "
+                       f"different entities ({' / '.join(names)}); it must "
+                       "not be reused as the business partner number")
             )
 
     return result
@@ -237,13 +342,15 @@ def cleanse_open_items(
     rows: list[dict[str, str]], known_partners: set[str]
 ) -> CleanseResult:
     result = CleanseResult(object_name="open_items")
-    documents: dict[tuple[str, str, str], list[dict[str, str]]] = defaultdict(list)
+    documents: dict[tuple[str, str, str, str], list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
-        documents[(row["BUKRS"], row["BELNR"], row["GJAHR"])].append(row)
+        documents[
+            (row["SOURCE_SYSTEM"], row["BUKRS"], row["BELNR"], row["GJAHR"])
+        ].append(row)
 
-    for (bukrs, belnr, gjahr), lines in documents.items():
-        key = f"{bukrs}/{belnr}/{gjahr}"
+    for (system, bukrs, belnr, gjahr), lines in documents.items():
+        key = f"{system}/{bukrs}/{belnr}/{gjahr}"
         reject_document = False
 
         debit = sum(
@@ -264,11 +371,14 @@ def cleanse_open_items(
 
         for line in lines:
             partner = line["PARTNER"]
-            if partner and partner not in known_partners:
+            # Resolved within the line's own system: the same number in
+            # the other system is a different company.
+            if partner and source_key(line, "PARTNER") not in known_partners:
                 reject_document = True
                 result.issues.append(
                     _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
-                           f"partner {partner} is not in the migrated master data")
+                           f"partner {partner} is not in the migrated master "
+                           f"data for {system}")
                 )
             if partner and not line["ZFBDT"]:
                 result.issues.append(
@@ -288,9 +398,9 @@ def cleanse_batch_stock(
     result = CleanseResult(object_name="batch_stock")
 
     for row in rows:
-        key = f"{row['WERKS']}/{row['MATNR']}/{row['CHARG']}"
+        key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
         reject = False
-        material = materials.get(row["MATNR"])
+        material = materials.get(source_key(row, "MATNR"))
 
         if material is None:
             reject = True

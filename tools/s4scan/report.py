@@ -4,6 +4,12 @@ Turns raw findings into the artefacts the programme actually consumes:
 a prioritised remediation backlog, an effort estimate that includes the
 GxP validation overhead, and a machine readable feed for the programme
 dashboard.
+
+The estate spans two ECC source systems that merge into one S/4HANA
+target, so the report also prices the merge itself: what convergence
+costs against remediating both implementations separately, and what
+falls away entirely because the objects only exist to bridge the two
+systems.
 """
 
 from __future__ import annotations
@@ -11,14 +17,20 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from .inventory import SOURCE_SYSTEMS
 from .rules import Severity
-from .scanner import ObjectResult, ScanResult
+from .scanner import ConvergenceGroup, ObjectResult, ScanResult
 
 # One effort point is one engineer-hour of remediation work before the
 # GxP validation multiplier is applied. Calibrated against the Wave 0
 # pilot objects; revise once the first wave closes.
 EFFORT_POINT_HOURS = 1.0
 HOURS_PER_DAY = 7.5
+
+# Resolving the functional divergence between two implementations of
+# the same function - fit-gap, target design, agreeing one set of
+# business rules - before either can be built. Paid once per group.
+CONVERGENCE_DESIGN_POINTS = 13
 
 WAVE_ORDER = {"wave0": 0, "wave1": 1, "wave2": 2, "unassigned": 9}
 
@@ -44,6 +56,44 @@ class EffortEstimate:
         )
 
 
+@dataclass(frozen=True)
+class ConvergenceEstimate:
+    """What a convergence group costs, and what the merge saves.
+
+    ``independent_days`` is what remediating every implementation in
+    place would cost. ``converged_days`` builds one object instead: the
+    largest implementation, plus the fit-gap that reconciles the others
+    into it. The difference is only realised if the group is planned as
+    one piece of work - remediate them separately and it is lost.
+    """
+
+    group_id: str
+    wave: str
+    source_systems: tuple[str, ...]
+    independent_days: float
+    converged_days: float
+    avoided_days: float
+
+    @classmethod
+    def from_group(cls, group: ConvergenceGroup) -> ConvergenceEstimate:
+        member_days = [_days(obj.weighted_effort_points) for obj in group.objects]
+        independent = sum(member_days)
+        design = _days(CONVERGENCE_DESIGN_POINTS * group.validation_multiplier)
+        converged = max(member_days) + design
+        return cls(
+            group_id=group.group_id,
+            wave=group.wave,
+            source_systems=tuple(group.source_systems),
+            independent_days=round(independent, 1),
+            converged_days=round(converged, 1),
+            avoided_days=round(max(independent - converged, 0.0), 1),
+        )
+
+
+def _days(effort_points: float) -> float:
+    return effort_points * EFFORT_POINT_HOURS / HOURS_PER_DAY
+
+
 def priority_score(obj: ObjectResult) -> tuple:
     """Backlog ordering: wave, then severity, then business exposure."""
     worst = obj.worst_severity
@@ -64,13 +114,34 @@ def build_backlog(result: ScanResult) -> list[ObjectResult]:
     return sorted(result.outstanding(), key=priority_score)
 
 
+def convergence_estimates(result: ScanResult) -> list[ConvergenceEstimate]:
+    return [
+        ConvergenceEstimate.from_group(group)
+        for group in result.convergence_groups()
+        # A pair that is decommissioned at the merge has no successor to
+        # design, so it carries no convergence effort - it is counted in
+        # the decommission saving instead.
+        if not group.is_remediated and not group.is_decommissioned
+    ]
+
+
+def count_by_source_system(objects: list[ObjectResult]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for obj in objects:
+        counts[obj.source_system] = counts.get(obj.source_system, 0) + len(obj.findings)
+    return dict(sorted(counts.items()))
+
+
 def to_json(result: ScanResult) -> str:
     backlog = build_backlog(result)
+    convergence = convergence_estimates(result)
+    decommissioned = result.decommissioned()
     payload = {
         "summary": {
             "objects_scanned": len(result.objects),
             "objects_with_findings": len(result.objects_with_findings()),
             "objects_remediated": len(result.remediated()),
+            "objects_decommissioned": len(decommissioned),
             "objects_outstanding": len(backlog),
             "effective_loc": result.scanned_loc,
             "findings": len(result.findings),
@@ -78,9 +149,34 @@ def to_json(result: ScanResult) -> str:
             "by_severity": count_by_severity(backlog),
             "by_rule": count_by_rule(backlog),
             "by_wave": count_by_wave(backlog),
+            "by_source_system": count_by_source_system(backlog),
         },
         "effort": EffortEstimate.from_objects(backlog).__dict__,
         "cleared_effort": EffortEstimate.from_objects(result.remediated()).__dict__,
+        "merge": {
+            "source_systems": {
+                system: SOURCE_SYSTEMS.get(system, system)
+                for system in sorted(result.by_source_system())
+                if system != "unassigned"
+            },
+            "convergence_groups": [estimate.__dict__ for estimate in convergence],
+            "convergence_avoided_days": round(
+                sum(estimate.avoided_days for estimate in convergence), 1
+            ),
+            "decommission_avoided_days": round(
+                EffortEstimate.from_objects(decommissioned).engineer_days, 1
+            ),
+            "decommissioned": [
+                {
+                    "object_name": obj.object_name,
+                    "source_system": obj.source_system,
+                    "path": obj.path,
+                    "convergence_group": obj.convergence_group,
+                    "findings_not_remediated": len(obj.findings),
+                }
+                for obj in decommissioned
+            ],
+        },
         "remediated": [
             {
                 "object_name": obj.object_name,
@@ -94,9 +190,12 @@ def to_json(result: ScanResult) -> str:
         "objects": [
             {
                 "object_name": obj.object_name,
+                "source_system": obj.source_system,
                 "path": obj.path,
                 "wave": obj.wave,
                 "gxp_class": obj.gxp_class,
+                "convergence_group": obj.convergence_group,
+                "disposition": obj.disposition,
                 "owner": obj.entry.owner if obj.entry else None,
                 "validation_package": (
                     obj.entry.validation_package if obj.entry else None
@@ -152,6 +251,17 @@ def to_markdown(result: ScanResult) -> str:
     )
     lines.append("")
     lines.append(
+        "The estate spans two ECC source systems merging into one "
+        "S/4HANA target, so an object has one of three dispositions. "
+        "`retain` is remediated in place. `converge` is remediated "
+        "jointly with its counterpart in the other system, because both "
+        "become one object. `decommission` is never remediated - the "
+        "object exists only to bridge the two systems and stops "
+        "existing when they are one, so it is excluded from the backlog "
+        "below and reported as avoided effort instead."
+    )
+    lines.append("")
+    lines.append(
         "Findings found and findings outstanding are different numbers: an "
         "object with a `remediated_path` keeps its findings as cleared "
         "evidence but leaves the backlog. Every breakdown below, and every "
@@ -167,8 +277,12 @@ def to_markdown(result: ScanResult) -> str:
     cleared = EffortEstimate.from_objects(remediated)
     outstanding_findings = sum(len(obj.findings) for obj in backlog)
 
+    decommissioned = result.decommissioned()
+    convergence = convergence_estimates(result)
+
     lines.append(f"| Objects scanned | {len(result.objects)} |")
     lines.append(f"| Objects remediated | {len(remediated)} |")
+    lines.append(f"| Objects decommissioned at merge | {len(decommissioned)} |")
     lines.append(f"| Objects outstanding | {len(backlog)} |")
     lines.append(f"| Effective lines of code | {result.scanned_loc} |")
     lines.append(f"| Findings outstanding | {outstanding_findings} |")
@@ -186,6 +300,10 @@ def to_markdown(result: ScanResult) -> str:
     )
     lines.append(f"| Engineer-days cleared | {cleared.engineer_days} |")
     lines.append("")
+
+    lines.extend(_source_system_section(result, backlog))
+    lines.extend(_convergence_section(convergence))
+    lines.extend(_decommission_section(decommissioned))
 
     if remediated:
         lines.append("## Remediated")
@@ -232,18 +350,26 @@ def to_markdown(result: ScanResult) -> str:
     lines.append("## Prioritised backlog")
     lines.append("")
     lines.append(
-        "| # | Object | Wave | GxP | Owner | Blocker | Critical | Major | "
-        "Minor | Engineer-days |"
+        "| # | Object | System | Wave | GxP | Disposition | Owner | Blocker | "
+        "Critical | Major | Minor | Engineer-days |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append(
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    )
     for index, obj in enumerate(backlog, start=1):
         counts = obj.count_by_severity()
-        days = round(obj.weighted_effort_points * EFFORT_POINT_HOURS / HOURS_PER_DAY, 1)
+        days = round(_days(obj.weighted_effort_points), 1)
         owner = obj.entry.owner if obj.entry else "unknown"
+        disposition = (
+            f"{obj.disposition} ({obj.convergence_group})"
+            if obj.convergence_group
+            else obj.disposition
+        )
         lines.append(
-            f"| {index} | {obj.object_name} | {obj.wave} | {obj.gxp_class} | "
-            f"{owner} | {counts['blocker']} | {counts['critical']} | "
-            f"{counts['major']} | {counts['minor']} | {days} |"
+            f"| {index} | {obj.object_name} | {obj.source_system} | {obj.wave} | "
+            f"{obj.gxp_class} | {disposition} | {owner} | {counts['blocker']} | "
+            f"{counts['critical']} | {counts['major']} | {counts['minor']} | "
+            f"{days} |"
         )
     lines.append("")
 
@@ -252,8 +378,13 @@ def to_markdown(result: ScanResult) -> str:
     for obj in backlog:
         lines.append(f"### {obj.object_name}")
         lines.append("")
-        lines.append(f"- Source: `{obj.path}`")
+        lines.append(f"- Source: `{obj.path}` ({obj.source_system})")
         lines.append(f"- Wave: {obj.wave} | GxP class: {obj.gxp_class}")
+        if obj.convergence_group:
+            lines.append(
+                f"- Disposition: {obj.disposition} | Convergence group: "
+                f"{obj.convergence_group}"
+            )
         if obj.entry:
             lines.append(
                 f"- Owner: {obj.entry.owner} | Validation package: "
@@ -287,6 +418,92 @@ def to_markdown(result: ScanResult) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _source_system_section(
+    result: ScanResult, backlog: list[ObjectResult]
+) -> list[str]:
+    lines = ["## Source systems", ""]
+    lines.append(
+        "Two ECC 6.0 systems converge on one S/4HANA target. Objects and "
+        "findings below are the outstanding backlog, per system."
+    )
+    lines.append("")
+    lines.append("| System | Description | Objects in estate | Outstanding | "
+                 "Findings | Engineer-days |")
+    lines.append("| --- | --- | --- | --- | --- | --- |")
+    for system, objects in result.by_source_system().items():
+        outstanding = [obj for obj in backlog if obj.source_system == system]
+        effort = EffortEstimate.from_objects(outstanding)
+        findings = sum(len(obj.findings) for obj in outstanding)
+        lines.append(
+            f"| {system} | {SOURCE_SYSTEMS.get(system, system)} | "
+            f"{len(objects)} | {len(outstanding)} | {findings} | "
+            f"{effort.engineer_days} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _convergence_section(convergence: list[ConvergenceEstimate]) -> list[str]:
+    if not convergence:
+        return []
+
+    lines = ["## Convergence backlog", ""]
+    lines.append(
+        "Functions implemented separately in both ECC systems. Each "
+        "group becomes one S/4HANA object, so it is planned and "
+        "delivered once: `converged` is the largest implementation plus "
+        "the fit-gap that reconciles the other into it, against "
+        "`independent`, which is what remediating both in place would "
+        "cost. The difference is only realised if the group is "
+        "sequenced as one piece of work."
+    )
+    lines.append("")
+    lines.append(
+        "| Group | Wave | Systems | Independent days | Converged days | Avoided |"
+    )
+    lines.append("| --- | --- | --- | --- | --- | --- |")
+    for estimate in convergence:
+        systems = ", ".join(estimate.source_systems)
+        lines.append(
+            f"| {estimate.group_id} | {estimate.wave} | {systems} | "
+            f"{estimate.independent_days} | {estimate.converged_days} | "
+            f"{estimate.avoided_days} |"
+        )
+    total_avoided = round(sum(e.avoided_days for e in convergence), 1)
+    lines.append(f"| **Total** | | | | | **{total_avoided}** |")
+    lines.append("")
+    return lines
+
+
+def _decommission_section(decommissioned: list[ObjectResult]) -> list[str]:
+    if not decommissioned:
+        return []
+
+    effort = EffortEstimate.from_objects(decommissioned)
+    lines = ["## Decommissioned at merge", ""]
+    lines.append(
+        "These objects exist only because the two companies run on two "
+        "systems. In one S/4HANA client the intercompany transfer "
+        "becomes an internal movement, so the interface, its partner "
+        "profiles and its reconciliation job all go away. They carry "
+        f"{sum(len(obj.findings) for obj in decommissioned)} findings "
+        f"that will never be remediated - {effort.engineer_days} "
+        "engineer-days avoided, provided the estate is sized against "
+        "the merged target rather than object by object."
+    )
+    lines.append("")
+    lines.append("| Object | System | Findings dropped | Engineer-days avoided |")
+    lines.append("| --- | --- | --- | --- |")
+    for obj in decommissioned:
+        days = round(_days(obj.weighted_effort_points), 1)
+        lines.append(
+            f"| {obj.object_name} | {obj.source_system} | "
+            f"{len(obj.findings)} | {days} |"
+        )
+    lines.append("")
+    return lines
 
 
 def _rule_for(result: ScanResult, rule_id: str):

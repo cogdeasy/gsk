@@ -50,6 +50,7 @@ class Category(str, Enum):
     MASTER_DATA = "master_data"
     TECHNICAL_DEBT = "technical_debt"
     VALIDATION = "validation"
+    CONVERGENCE = "convergence"
 
 
 @dataclass(frozen=True)
@@ -401,6 +402,22 @@ RULES: tuple[Rule, ...] = (
 
 
 OBJECT_RULES: tuple[Rule, ...] = (
+    Rule(
+        id="SI-CONV-001",
+        title="Function implemented separately in both ECC systems",
+        category=Category.CONVERGENCE,
+        severity=Severity.CRITICAL,
+        effort_points=8,
+        guidance=(
+            "The core and Vaccines systems each grew their own "
+            "implementation of this function. The target is one object, "
+            "so the functional divergence between the two has to be "
+            "resolved in fit-gap before either is remediated - "
+            "remediating both in place carries the duplication into "
+            "S/4HANA and doubles the validation package."
+        ),
+        sap_reference="System consolidation / selective data transition",
+    ),
     Rule(
         id="SI-GXP-001",
         title="GxP object has no automated test evidence",

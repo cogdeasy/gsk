@@ -1,4 +1,16 @@
-"""Extraction layer: read the ECC wave extracts."""
+"""Extraction layer: read the wave extracts from both ECC systems.
+
+A wave folder holds one sub-folder per source system. Every row is
+tagged with the system it came from, because the two systems were
+configured from the same template and their key ranges overlap: a
+KUNNR is only unique within a system, so from here on the key of a
+source record is the pair (system, key).
+
+The wave folder also holds the material harmonisation table - the
+governed decision about which duplicated products collapse into one
+target product. That is a business decision made in MDG, not something
+the pipeline is allowed to infer, so it is read as input.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +18,13 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Logical object name -> file name in the wave extract folder.
+# Source system -> sub-folder in the wave extract directory.
+SOURCE_SYSTEMS = {
+    "GEP": "gep",
+    "GVP": "gvp",
+}
+
+# Logical object name -> file name in each system's extract folder.
 EXTRACT_FILES = {
     "materials": "ecc_mara_material_master.csv",
     "customers": "ecc_kna1_customers.csv",
@@ -14,6 +32,10 @@ EXTRACT_FILES = {
     "open_items": "ecc_open_items.csv",
     "batch_stock": "ecc_batch_stock.csv",
 }
+
+HARMONISATION_FILE = "material_harmonisation.csv"
+
+SYSTEM_FIELD = "SOURCE_SYSTEM"
 
 
 class ExtractError(RuntimeError):
@@ -23,7 +45,7 @@ class ExtractError(RuntimeError):
 @dataclass
 class Dataset:
     name: str
-    source: str
+    sources: list[str] = field(default_factory=list)
     rows: list[dict[str, str]] = field(default_factory=list)
 
     def __len__(self) -> int:
@@ -32,8 +54,22 @@ class Dataset:
     def __iter__(self):
         return iter(self.rows)
 
+    def for_system(self, system: str) -> list[dict[str, str]]:
+        return [row for row in self.rows if row[SYSTEM_FIELD] == system]
 
-def read_csv(path: str | Path, name: str) -> Dataset:
+
+@dataclass(frozen=True)
+class HarmonisationDecision:
+    """One governed decision to collapse a duplicated product."""
+
+    source_system: str
+    material: str
+    target_product: str
+    decision: str
+    note: str
+
+
+def read_csv(path: str | Path, name: str, source_system: str = "") -> Dataset:
     file_path = Path(path)
     if not file_path.exists():
         raise ExtractError(f"extract not found: {file_path}")
@@ -41,18 +77,54 @@ def read_csv(path: str | Path, name: str) -> Dataset:
     rows: list[dict[str, str]] = []
     with open(file_path, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
-            rows.append({key: (value or "").strip() for key, value in row.items()})
+            record = {key: (value or "").strip() for key, value in row.items()}
+            if source_system:
+                record[SYSTEM_FIELD] = source_system
+            rows.append(record)
 
-    return Dataset(name=name, source=file_path.as_posix(), rows=rows)
+    return Dataset(name=name, sources=[file_path.as_posix()], rows=rows)
+
+
+def read_harmonisation(path: str | Path) -> list[HarmonisationDecision]:
+    """Read the product harmonisation table, if the wave has one."""
+    file_path = Path(path)
+    if not file_path.exists():
+        return []
+
+    decisions: list[HarmonisationDecision] = []
+    with open(file_path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            decisions.append(
+                HarmonisationDecision(
+                    source_system=row["SOURCE_SYSTEM"].strip().upper(),
+                    material=row["MATNR"].strip(),
+                    target_product=row["TARGET_PRODUCT"].strip(),
+                    decision=row["DECISION"].strip(),
+                    note=(row.get("NOTE") or "").strip(),
+                )
+            )
+    return decisions
 
 
 def extract_wave(source_dir: str | Path) -> dict[str, Dataset]:
-    """Read every extract for a wave, keyed by logical object name."""
+    """Read every extract for a wave from every source system."""
     base = Path(source_dir)
     if not base.is_dir():
         raise ExtractError(f"wave source directory not found: {base}")
 
-    return {
-        name: read_csv(base / filename, name)
-        for name, filename in EXTRACT_FILES.items()
+    datasets = {
+        name: Dataset(name=name) for name in EXTRACT_FILES
     }
+
+    for system, folder in SOURCE_SYSTEMS.items():
+        system_dir = base / folder
+        if not system_dir.is_dir():
+            raise ExtractError(
+                f"no extract folder for source system {system}: {system_dir}"
+            )
+        for name, filename in EXTRACT_FILES.items():
+            part = read_csv(system_dir / filename, name, source_system=system)
+            datasets[name].sources.extend(part.sources)
+            datasets[name].rows.extend(part.rows)
+
+    return datasets

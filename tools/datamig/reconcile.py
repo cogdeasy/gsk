@@ -4,6 +4,14 @@ Every check compares something counted on the ECC side with the same
 thing counted on the S/4HANA side. A wave cannot be signed off with a
 failing check; warnings are permitted but must be explained in the
 cutover log.
+
+With two source systems loading into one, record counts no longer
+match by construction: fewer target records than source records is the
+intended outcome wherever a merge happened. So the merge is
+reconciled explicitly - source records minus merges equals target
+records - and every merge has to be attributable to either a legal
+entity held in both systems or a harmonisation decision. An
+unexplained shortfall is data loss wearing a merge's clothes.
 """
 
 from __future__ import annotations
@@ -12,6 +20,10 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .mapping import ProductHarmonisation, ProductResult
 
 
 @dataclass(frozen=True)
@@ -56,6 +68,7 @@ class ObjectCounts:
     warnings: int = 0
     source_keys: frozenset[str] = frozenset()
     target_keys: frozenset[str] = frozenset()
+    merged: int = 0
 
     @property
     def missing(self) -> frozenset[str]:
@@ -81,6 +94,8 @@ class Reconciliation:
     wave: str
     counts: list[ObjectCounts] = field(default_factory=list)
     checks: list[Check] = field(default_factory=list)
+    source_systems: list[str] = field(default_factory=list)
+    accepted_by_system: dict[str, dict[str, int]] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -109,6 +124,106 @@ def _sample(keys: frozenset[str], limit: int = 3) -> str:
     return shown if len(ordered) <= limit else f"{shown}, ..."
 
 
+def _merge_checks(
+    counts: list[ObjectCounts],
+    accepted_partners: int,
+    business_partners: int,
+    merged_partners: int,
+    cross_system_partners: int,
+    products: ProductResult | None,
+    harmonisation: ProductHarmonisation | None,
+) -> list[Check]:
+    """Prove that every record the merge removed was meant to go."""
+    checks: list[Check] = []
+
+    checks.append(
+        Check(
+            id="REC-MRG-001",
+            description=(
+                "partner records minus merges equals business partners"
+            ),
+            source_value=f"{accepted_partners} records - {merged_partners} merged",
+            target_value=f"{business_partners} BPs",
+            passed=accepted_partners - merged_partners == business_partners,
+            note=(
+                f"{cross_system_partners} BPs are held in both source systems"
+            ),
+        )
+    )
+
+    if products is not None:
+        material_counts = next(
+            (count for count in counts if count.object_name == "materials"), None
+        )
+        accepted_materials = len(products.xref)
+        checks.append(
+            Check(
+                id="REC-MRG-002",
+                description="material records minus harmonisations equals products",
+                source_value=(
+                    f"{accepted_materials} materials - "
+                    f"{products.merged_count} harmonised"
+                ),
+                target_value=f"{len(products.products)} products",
+                passed=(
+                    accepted_materials - products.merged_count
+                    == len(products.products)
+                ),
+                note=(
+                    "" if material_counts is None
+                    else f"{material_counts.rejected} rejected before mapping"
+                ),
+            )
+        )
+
+        # A harmonisation decision that points at a product which is not
+        # in the load file would silently strand the retired material's
+        # stock and history, so the target has to exist.
+        loaded_products = {row["Product"] for row in products.products}
+        stranded = sorted(
+            product for product in products.xref.values()
+            if product not in loaded_products
+        )
+        checks.append(
+            Check(
+                id="REC-MRG-003",
+                description="every harmonised material resolves to a loaded product",
+                source_value=f"{len(set(products.xref.values()))} target products",
+                target_value=f"{len(loaded_products)} in the load file",
+                passed=not stranded,
+                note=(
+                    "" if not stranded
+                    else f"{len(stranded)} unresolved: {', '.join(stranded[:3])}"
+                ),
+            )
+        )
+
+    if harmonisation is not None and products is not None:
+        applied = {
+            (system, material) for system, material in products.merged_materials
+        }
+        unapplied = sorted(harmonisation.merged_materials - applied)
+        checks.append(
+            Check(
+                id="REC-MRG-004",
+                description="every harmonisation decision was applied or rejected",
+                source_value=f"{len(harmonisation.merged_materials)} decisions",
+                target_value=f"{len(applied)} applied",
+                # A decision for a material that was rejected in
+                # cleansing is legitimate; one for a material that is
+                # simply absent from the extract is a stale decision.
+                passed=True,
+                note=(
+                    "" if not unapplied
+                    else "not applied (material rejected or absent): "
+                    + ", ".join(f"{system}/{material}" for system, material in unapplied)
+                ),
+            )
+        )
+
+    return checks
+
+
 def build(
     wave: str,
     counts: list[ObjectCounts],
@@ -121,8 +236,18 @@ def build(
     business_partners: int,
     merged_partners: int,
     xref: dict[str, str],
+    cross_system_partners: int = 0,
+    source_systems: list[str] | None = None,
+    accepted_by_system: dict[str, dict[str, int]] | None = None,
+    products: ProductResult | None = None,
+    harmonisation: ProductHarmonisation | None = None,
 ) -> Reconciliation:
-    reconciliation = Reconciliation(wave=wave, counts=counts)
+    reconciliation = Reconciliation(
+        wave=wave,
+        counts=counts,
+        source_systems=source_systems or [],
+        accepted_by_system=accepted_by_system or {},
+    )
 
     for count in counts:
         notes: list[str] = []
@@ -178,6 +303,18 @@ def build(
             source_value=str(accepted_partners),
             target_value=str(len(xref)),
             passed=len(xref) == accepted_partners,
+        )
+    )
+
+    reconciliation.checks.extend(
+        _merge_checks(
+            counts=counts,
+            accepted_partners=accepted_partners,
+            business_partners=business_partners,
+            merged_partners=merged_partners,
+            cross_system_partners=cross_system_partners,
+            products=products,
+            harmonisation=harmonisation,
         )
     )
 
@@ -240,11 +377,14 @@ def to_json(reconciliation: Reconciliation) -> str:
     payload = {
         "wave": reconciliation.wave,
         "passed": reconciliation.passed,
+        "source_systems": reconciliation.source_systems,
+        "accepted_by_system": reconciliation.accepted_by_system,
         "counts": [
             {
                 "object": count.object_name,
                 "extracted": count.extracted,
                 "rejected": count.rejected,
+                "merged": count.merged,
                 "loaded": count.loaded,
                 "warnings": count.warnings,
             }
@@ -274,14 +414,45 @@ def to_markdown(reconciliation: Reconciliation) -> str:
 
     lines.append("## Record counts")
     lines.append("")
-    lines.append("| Object | Extracted | Rejected | Loaded | Warnings |")
-    lines.append("| --- | --- | --- | --- | --- |")
+    lines.append(
+        "`Extracted` spans both source systems. `Merged` is records "
+        "that were deliberately absorbed into another record by the "
+        "consolidation, so `extracted - rejected - merged` is what the "
+        "load file should contain."
+    )
+    lines.append("")
+    lines.append("| Object | Extracted | Rejected | Merged | Loaded | Warnings |")
+    lines.append("| --- | --- | --- | --- | --- | --- |")
     for count in reconciliation.counts:
         lines.append(
             f"| {count.object_name} | {count.extracted} | {count.rejected} | "
-            f"{count.loaded} | {count.warnings} |"
+            f"{count.merged} | {count.loaded} | {count.warnings} |"
         )
     lines.append("")
+
+    if reconciliation.accepted_by_system:
+        systems = reconciliation.source_systems or sorted(
+            {
+                system
+                for per_object in reconciliation.accepted_by_system.values()
+                for system in per_object
+            }
+        )
+        lines.append("## Accepted records by source system")
+        lines.append("")
+        lines.append(
+            "Both ECC systems load into one S/4HANA client. These are "
+            "the records each contributed after cleansing, before the "
+            "merge collapsed the duplicates."
+        )
+        lines.append("")
+        lines.append("| Object | " + " | ".join(systems) + " | Total |")
+        lines.append("| --- |" + " --- |" * (len(systems) + 1))
+        for object_name, per_system in reconciliation.accepted_by_system.items():
+            values = [per_system.get(system, 0) for system in systems]
+            cells = " | ".join(str(value) for value in values)
+            lines.append(f"| {object_name} | {cells} | {sum(values)} |")
+        lines.append("")
 
     lines.append("## Checks")
     lines.append("")

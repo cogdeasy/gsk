@@ -1,113 +1,184 @@
 {
   "wave": "wave0",
   "passed": true,
+  "source_systems": [
+    "GEP",
+    "GVP"
+  ],
+  "accepted_by_system": {
+    "materials": {
+      "GEP": 18,
+      "GVP": 8
+    },
+    "customers": {
+      "GEP": 15,
+      "GVP": 8
+    },
+    "vendors": {
+      "GEP": 13,
+      "GVP": 7
+    },
+    "open_items": {
+      "GEP": 22,
+      "GVP": 14
+    },
+    "batch_stock": {
+      "GEP": 14,
+      "GVP": 8
+    }
+  },
   "counts": [
     {
       "object": "materials",
-      "extracted": 20,
-      "rejected": 2,
-      "loaded": 18,
-      "warnings": 2
-    },
-    {
-      "object": "customers",
-      "extracted": 16,
-      "rejected": 1,
-      "loaded": 15,
-      "warnings": 2
-    },
-    {
-      "object": "vendors",
-      "extracted": 14,
-      "rejected": 1,
-      "loaded": 13,
+      "extracted": 30,
+      "rejected": 4,
+      "merged": 3,
+      "loaded": 23,
       "warnings": 6
     },
     {
+      "object": "customers",
+      "extracted": 25,
+      "rejected": 2,
+      "merged": 0,
+      "loaded": 23,
+      "warnings": 9
+    },
+    {
+      "object": "vendors",
+      "extracted": 21,
+      "rejected": 1,
+      "merged": 0,
+      "loaded": 20,
+      "warnings": 11
+    },
+    {
       "object": "open_items",
-      "extracted": 26,
-      "rejected": 4,
-      "loaded": 22,
-      "warnings": 0
+      "extracted": 42,
+      "rejected": 6,
+      "merged": 0,
+      "loaded": 36,
+      "warnings": 1
     },
     {
       "object": "batch_stock",
-      "extracted": 20,
-      "rejected": 6,
-      "loaded": 14,
-      "warnings": 7
+      "extracted": 31,
+      "rejected": 9,
+      "merged": 0,
+      "loaded": 22,
+      "warnings": 10
     }
   ],
   "checks": [
     {
       "id": "REC-CNT-materials",
       "description": "materials: every accepted record loaded once",
-      "source_value": "18 accepted keys",
-      "target_value": "18 keys in the load file",
+      "source_value": "23 accepted keys",
+      "target_value": "23 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-customers",
       "description": "customers: every accepted record loaded once",
-      "source_value": "15 accepted keys",
-      "target_value": "15 keys in the load file",
+      "source_value": "23 accepted keys",
+      "target_value": "23 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-vendors",
       "description": "vendors: every accepted record loaded once",
-      "source_value": "13 accepted keys",
-      "target_value": "13 keys in the load file",
+      "source_value": "20 accepted keys",
+      "target_value": "20 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-open_items",
       "description": "open_items: every accepted record loaded once",
-      "source_value": "22 accepted keys",
-      "target_value": "22 keys in the load file",
+      "source_value": "36 accepted keys",
+      "target_value": "36 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-CNT-batch_stock",
       "description": "batch_stock: every accepted record loaded once",
-      "source_value": "14 accepted keys",
-      "target_value": "14 keys in the load file",
+      "source_value": "22 accepted keys",
+      "target_value": "22 keys in the load file",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-BP-001",
       "description": "one business partner per distinct legal entity",
-      "source_value": "25 identities in 28 records",
-      "target_value": "25 BPs in the load file",
+      "source_value": "33 identities in 43 records",
+      "target_value": "33 BPs in the load file",
       "status": "PASS",
-      "note": "3 records merged into a shared BP"
+      "note": "10 records merged into a shared BP"
     },
     {
       "id": "REC-BP-002",
       "description": "every loaded open item partner resolves to a BP",
-      "source_value": "11",
-      "target_value": "11",
+      "source_value": "18",
+      "target_value": "18",
       "status": "PASS",
       "note": ""
     },
     {
       "id": "REC-BP-003",
       "description": "cross reference covers every migrated partner",
-      "source_value": "28",
-      "target_value": "28",
+      "source_value": "43",
+      "target_value": "43",
       "status": "PASS",
       "note": ""
+    },
+    {
+      "id": "REC-MRG-001",
+      "description": "partner records minus merges equals business partners",
+      "source_value": "43 records - 10 merged",
+      "target_value": "33 BPs",
+      "status": "PASS",
+      "note": "7 BPs are held in both source systems"
+    },
+    {
+      "id": "REC-MRG-002",
+      "description": "material records minus harmonisations equals products",
+      "source_value": "26 materials - 3 harmonised",
+      "target_value": "23 products",
+      "status": "PASS",
+      "note": "4 rejected before mapping"
+    },
+    {
+      "id": "REC-MRG-003",
+      "description": "every harmonised material resolves to a loaded product",
+      "source_value": "23 target products",
+      "target_value": "23 in the load file",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-MRG-004",
+      "description": "every harmonisation decision was applied or rejected",
+      "source_value": "4 decisions",
+      "target_value": "3 applied",
+      "status": "PASS",
+      "note": "not applied (material rejected or absent): GVP/000000000000700301"
     },
     {
       "id": "REC-FI-VAL-BE01-EUR",
       "description": "open item value total BE01 EUR",
       "source_value": "6448000.00",
       "target_value": "6448000.00",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-FI-VAL-BE02-EUR",
+      "description": "open item value total BE02 EUR",
+      "source_value": "18072000.00",
+      "target_value": "18072000.00",
       "status": "PASS",
       "note": ""
     },
@@ -152,6 +223,14 @@
       "note": ""
     },
     {
+      "id": "REC-FI-BAL-BE02",
+      "description": "loaded open items balance in BE02",
+      "source_value": "debit 9036000.00",
+      "target_value": "credit 9036000.00",
+      "status": "PASS",
+      "note": ""
+    },
+    {
       "id": "REC-FI-BAL-DE01",
       "description": "loaded open items balance in DE01",
       "source_value": "debit 1442000.00",
@@ -188,6 +267,22 @@
       "description": "unrestricted stock quantity in plant BE31",
       "source_value": "962000.000",
       "target_value": "962000.000",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-STK-BE32",
+      "description": "unrestricted stock quantity in plant BE32",
+      "source_value": "1495000.000",
+      "target_value": "1495000.000",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "id": "REC-STK-BE33",
+      "description": "unrestricted stock quantity in plant BE33",
+      "source_value": "19800.000",
+      "target_value": "19800.000",
       "status": "PASS",
       "note": ""
     },

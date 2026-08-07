@@ -7,6 +7,7 @@ from pathlib import Path
 
 LOAD_FILES = {
     "products": "s4_product.csv",
+    "product_xref": "s4_product_xref.csv",
     "business_partners": "s4_business_partner.csv",
     "bp_xref": "s4_business_partner_xref.csv",
     "open_items": "s4_open_item.csv",

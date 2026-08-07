@@ -1,10 +1,21 @@
 """Custom code object inventory.
 
-The inventory is the programme's view of the estate: who owns each
-object, which deployment wave it belongs to, how heavily it is used and
-whether it is GxP classified. Findings are joined to it so the backlog
-can be prioritised by wave and sized with the validation overhead that
-GxP objects carry.
+The inventory is the programme's view of the estate: which of the two
+ECC source systems an object lives in, who owns it, which deployment
+wave it belongs to, how heavily it is used and whether it is GxP
+classified. Findings are joined to it so the backlog can be prioritised
+by wave and sized with the validation overhead that GxP objects carry.
+
+Two columns carry the two-into-one merge:
+
+``convergence_group``
+    Objects sharing a group implement the same business function in
+    both source systems and collapse to a single S/4HANA object.
+``disposition``
+    ``retain`` - remediate this object in place.
+    ``converge`` - remediate as part of its convergence group.
+    ``decommission`` - the object stops existing when the two systems
+    become one, so it is not remediated at all.
 """
 
 from __future__ import annotations
@@ -12,6 +23,15 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
+
+SOURCE_SYSTEMS = {
+    "GEP": "GSK core ECC 6.0",
+    "GVP": "GSK Vaccines ECC 6.0",
+}
+
+RETAIN = "retain"
+CONVERGE = "converge"
+DECOMMISSION = "decommission"
 
 GXP_VALIDATION_MULTIPLIER = {
     "gxp_critical": 2.0,
@@ -30,6 +50,7 @@ CRITICALITY_WEIGHT = {
 @dataclass(frozen=True)
 class InventoryEntry:
     object_name: str
+    source_system: str
     object_type: str
     path: str
     module: str
@@ -39,6 +60,8 @@ class InventoryEntry:
     monthly_executions: int
     business_criticality: str
     validation_package: str
+    convergence_group: str = ""
+    disposition: str = RETAIN
     remediated_path: str = ""
 
     @property
@@ -57,6 +80,15 @@ class InventoryEntry:
     @property
     def criticality_weight(self) -> int:
         return CRITICALITY_WEIGHT.get(self.business_criticality, 0)
+
+    @property
+    def converges(self) -> bool:
+        return self.disposition == CONVERGE and bool(self.convergence_group)
+
+    @property
+    def is_decommissioned(self) -> bool:
+        """True when the merge removes the object instead of migrating it."""
+        return self.disposition == DECOMMISSION
 
 
 class Inventory:
@@ -79,6 +111,7 @@ class Inventory:
                 entries.append(
                     InventoryEntry(
                         object_name=row["object_name"].strip(),
+                        source_system=row["source_system"].strip().upper(),
                         object_type=row["object_type"].strip(),
                         path=row["path"].strip(),
                         module=row["module"].strip(),
@@ -88,6 +121,8 @@ class Inventory:
                         monthly_executions=int(row["monthly_executions"]),
                         business_criticality=row["business_criticality"].strip(),
                         validation_package=row["validation_package"].strip(),
+                        convergence_group=(row.get("convergence_group") or "").strip(),
+                        disposition=(row.get("disposition") or RETAIN).strip() or RETAIN,
                         remediated_path=(row.get("remediated_path") or "").strip(),
                     )
                 )
@@ -114,3 +149,10 @@ class Inventory:
 
     def waves(self) -> list[str]:
         return sorted({entry.wave for entry in self._entries})
+
+    def source_systems(self) -> list[str]:
+        return sorted({entry.source_system for entry in self._entries})
+
+    def convergence_group(self, group_id: str) -> list[InventoryEntry]:
+        """Every object that collapses into the same S/4HANA successor."""
+        return [entry for entry in self._entries if entry.convergence_group == group_id]

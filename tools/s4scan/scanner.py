@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import parser
-from .inventory import Inventory, InventoryEntry
+from .inventory import RETAIN, Inventory, InventoryEntry
 from .rules import OBJECT_RULES, RULES, Rule, RuleFilter, Severity
 
 ABAP_SUFFIXES = (".abap",)
@@ -74,6 +74,22 @@ class ObjectResult:
         return self.entry.gxp_class if self.entry else "unclassified"
 
     @property
+    def source_system(self) -> str:
+        return self.entry.source_system if self.entry else "unassigned"
+
+    @property
+    def convergence_group(self) -> str:
+        return self.entry.convergence_group if self.entry else ""
+
+    @property
+    def disposition(self) -> str:
+        return self.entry.disposition if self.entry else RETAIN
+
+    @property
+    def is_decommissioned(self) -> bool:
+        return self.entry.is_decommissioned if self.entry else False
+
+    @property
     def is_remediated(self) -> bool:
         return self.entry.is_remediated if self.entry else False
 
@@ -95,6 +111,55 @@ class ObjectResult:
 
 
 @dataclass
+class ConvergenceGroup:
+    """Objects in different ECC systems that become one S/4HANA object.
+
+    The two source systems each grew their own implementation of the
+    same business function. Remediating both and migrating both would
+    carry the duplication into the target, so the group is planned and
+    delivered as a single object: the fit-gap on the functional
+    divergence is real work, but it is paid once.
+    """
+
+    group_id: str
+    objects: list[ObjectResult] = field(default_factory=list)
+
+    @property
+    def source_systems(self) -> list[str]:
+        return sorted({obj.source_system for obj in self.objects})
+
+    @property
+    def is_cross_system(self) -> bool:
+        return len(self.source_systems) > 1
+
+    @property
+    def is_decommissioned(self) -> bool:
+        """The pair disappears at the merge rather than becoming one object.
+
+        Interfaces between the two systems are the usual case: once both
+        sides are in the same client there is nothing left to interface.
+        """
+        return all(obj.is_decommissioned for obj in self.objects)
+
+    @property
+    def findings(self) -> list[Finding]:
+        return [finding for obj in self.objects for finding in obj.findings]
+
+    @property
+    def wave(self) -> str:
+        """The group lands in the earliest wave any member belongs to."""
+        return min(obj.wave for obj in self.objects)
+
+    @property
+    def validation_multiplier(self) -> float:
+        return max(obj.validation_multiplier for obj in self.objects)
+
+    @property
+    def is_remediated(self) -> bool:
+        return all(obj.is_remediated for obj in self.objects)
+
+
+@dataclass
 class ScanResult:
     objects: list[ObjectResult] = field(default_factory=list)
 
@@ -110,11 +175,45 @@ class ScanResult:
         return [obj for obj in self.objects if obj.findings]
 
     def outstanding(self) -> list[ObjectResult]:
-        """Objects still to remediate: findings and no S/4HANA successor."""
-        return [obj for obj in self.objects_with_findings() if not obj.is_remediated]
+        """Objects still to remediate.
+
+        Excludes objects with an S/4HANA successor, and objects the
+        merge decommissions - those are never remediated, so counting
+        them as backlog overstates the programme.
+        """
+        return [
+            obj
+            for obj in self.objects_with_findings()
+            if not obj.is_remediated and not obj.is_decommissioned
+        ]
 
     def remediated(self) -> list[ObjectResult]:
         return [obj for obj in self.objects if obj.is_remediated]
+
+    def decommissioned(self) -> list[ObjectResult]:
+        """Objects that stop existing when the two systems become one."""
+        return [obj for obj in self.objects if obj.is_decommissioned]
+
+    def by_source_system(self) -> dict[str, list[ObjectResult]]:
+        grouped: dict[str, list[ObjectResult]] = {}
+        for obj in self.objects:
+            grouped.setdefault(obj.source_system, []).append(obj)
+        return dict(sorted(grouped.items()))
+
+    def convergence_groups(self) -> list[ConvergenceGroup]:
+        """Cross-system duplicates, in wave then group order."""
+        grouped: dict[str, ConvergenceGroup] = {}
+        for obj in self.objects:
+            if not obj.convergence_group:
+                continue
+            group = grouped.setdefault(
+                obj.convergence_group, ConvergenceGroup(obj.convergence_group)
+            )
+            group.objects.append(obj)
+        return sorted(
+            (group for group in grouped.values() if group.is_cross_system),
+            key=lambda group: (group.wave, group.group_id),
+        )
 
     def has_severity(self, severity: Severity) -> bool:
         """Gate on outstanding work only; remediated objects are done."""
@@ -212,6 +311,24 @@ def _apply_object_rules(
     for rule in OBJECT_RULES:
         if not rule_filter.applies(rule):
             continue
+        if rule.id == "SI-CONV-001":
+            if result.entry is None or not result.entry.converges:
+                continue
+            if result.is_remediated:
+                continue
+            result.findings.append(
+                Finding(
+                    rule=rule,
+                    path=result.path,
+                    line=1,
+                    evidence=result.entry.convergence_group,
+                    statement=(
+                        f"{result.object_name} ({result.entry.source_system}) "
+                        f"duplicates convergence group "
+                        f"{result.entry.convergence_group}"
+                    ),
+                )
+            )
         if rule.id == "SI-GXP-001":
             if result.entry is None or not result.entry.is_gxp:
                 continue
