@@ -148,17 +148,19 @@ def discover(root: str | Path) -> list[Path]:
 
 
 def has_test_class(path: Path, test_roots: list[Path]) -> bool:
-    stem = object_name_for(path).lower()
-    for root in test_roots:
-        if not root.exists():
-            continue
-        for candidate in root.rglob(f"*{TEST_SUFFIX}"):
-            if candidate.name.lower().startswith(stem):
-                return True
-            # A remediated class may carry the tests for its report.
-            if stem.startswith(candidate.name.lower().split(".")[0]):
-                return True
-    return False
+    """Test evidence is the file named after the object, and only that.
+
+    Prefix matching would let ZGSK_MM_STOCK.testclasses.abap stand as
+    the evidence for ZGSK_MM_STOCK_OVERVIEW, which is exactly the kind
+    of claim a GxP audit rejects.
+    """
+    expected = f"{object_name_for(path).lower()}{TEST_SUFFIX}"
+    return any(
+        candidate.name.lower() == expected
+        for root in test_roots
+        if root.exists()
+        for candidate in root.rglob(f"*{TEST_SUFFIX}")
+    )
 
 
 def scan_file(

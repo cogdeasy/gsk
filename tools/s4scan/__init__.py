@@ -5,6 +5,8 @@ clean-core violations, joins the findings to the object inventory
 (owner, wave, GxP classification) and produces the remediation backlog.
 """
 
+from __future__ import annotations
+
 __all__ = ["rules", "parser", "scanner", "inventory", "report"]
 
 __version__ = "0.1.0"

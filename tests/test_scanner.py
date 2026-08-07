@@ -1,9 +1,10 @@
+import json
 from pathlib import Path
 
 from s4scan import report
 from s4scan.inventory import Inventory
 from s4scan.rules import RuleFilter, Severity
-from s4scan.scanner import object_name_for, scan, scan_file
+from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEGACY = REPO_ROOT / "abap" / "src"
@@ -22,6 +23,17 @@ def test_object_name_is_derived_from_the_file_name():
     assert object_name_for(Path("a/zgsk_if_label_print.fugr.abap")) == (
         "ZGSK_IF_LABEL_PRINT"
     )
+
+
+def test_test_evidence_is_not_satisfied_by_a_similarly_named_class(tmp_path):
+    (tmp_path / "zgsk_mm_stock.testclasses.abap").write_text("CLASS ltcl DEFINITION.")
+    overview = tmp_path / "zgsk_mm_stock_overview.prog.abap"
+    overview.write_text("REPORT zgsk_mm_stock_overview.")
+
+    assert not has_test_class(overview, [tmp_path])
+
+    (tmp_path / "zgsk_mm_stock_overview.testclasses.abap").write_text("CLASS ltcl.")
+    assert has_test_class(overview, [tmp_path])
 
 
 def test_every_inventory_entry_points_at_a_real_file():
@@ -44,8 +56,6 @@ def test_remediated_objects_leave_the_backlog():
 
 
 def test_remediation_moves_findings_from_outstanding_to_cleared():
-    import json
-
     result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
     payload = json.loads(report.to_json(result))
     summary = payload["summary"]
