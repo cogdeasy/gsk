@@ -30,7 +30,7 @@ Findings found and findings outstanding are different numbers: an object with a 
 
 Two ECC 6.0 systems converge on one S/4HANA target. Objects and findings below are the outstanding backlog, per system.
 
-| System | Description | Objects in estate | Outstanding | Findings | Engineer-days |
+| System | Description | Objects scanned | Outstanding | Findings | Engineer-days |
 | --- | --- | --- | --- | --- | --- |
 | GEP | GSK core ECC 6.0 | 17 | 14 | 177 | 158.7 |
 | GVP | GSK Vaccines ECC 6.0 | 8 | 7 | 102 | 115.1 |

@@ -297,6 +297,17 @@ def build(
     accepted_materials: list[dict[str, str]] | None = None,
     extracted_products: set[str] | None = None,
 ) -> Reconciliation:
+    # The merge checks read their source side off the ECC records, so a
+    # caller supplying only the load file would get a check failing on
+    # nothing - zero materials against a full load file. A fabricated
+    # failure is as bad as one that cannot fail: it is a red evidence
+    # pack that says nothing about the data.
+    if products is not None and accepted_materials is None:
+        raise ValueError(
+            "products needs accepted_materials: REC-MRG-002 counts its "
+            "source side on the ECC side"
+        )
+
     reconciliation = Reconciliation(
         wave=wave,
         counts=counts,

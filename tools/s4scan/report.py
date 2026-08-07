@@ -468,7 +468,11 @@ def _source_system_section(
         "findings below are the outstanding backlog, per system."
     )
     lines.append("")
-    lines.append("| System | Description | Objects in estate | Outstanding | "
+    # "Objects scanned", not "in estate": under a filter this counts the
+    # view, and the convergence section below it deliberately prices the
+    # whole group. Two columns headed as estate figures, one of which is
+    # not, is worse than one honest label.
+    lines.append("| System | Description | Objects scanned | Outstanding | "
                  "Findings | Engineer-days |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for system, objects in by_source_system(result).items():

@@ -181,12 +181,18 @@ def cleanse_materials(
             row["MAKTX"] = row["MAKTX"].upper()
 
         descriptions[row["MAKTX"]].append(key)
+        # Every extracted row, accepted or not. A collision is a fact
+        # about the two extracts, not about how cleansing happened to
+        # treat them: recording only accepted rows would let the
+        # survivor load under the bare number whenever the other side
+        # was rejected for something unrelated, which is exactly what
+        # DQ-MAT-009 exists to stop.
+        numbers[row["MATNR"]].append(row)
 
         if reject:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
-            numbers[row["MATNR"]].append(row)
 
     for description, keys in descriptions.items():
         if len(keys) > 1:
@@ -225,6 +231,7 @@ def _reject_undecided_collisions(
     decision, so both wait for one.
     """
     colliding: list[dict[str, str]] = []
+    accepted = {source_key(row, "MATNR") for row in result.accepted}
 
     for number, rows in numbers.items():
         undecided = [
@@ -235,7 +242,13 @@ def _reject_undecided_collisions(
         if len(systems) < 2:
             continue
         keys = ", ".join(source_key(row, "MATNR") for row in undecided)
-        colliding.extend(undecided)
+        # Only what is still in the load can be held back; a row another
+        # rule already rejected is named in the message and left where
+        # it is, so it is not counted as rejected twice.
+        colliding.extend(
+            row for row in undecided
+            if source_key(row, "MATNR") in accepted
+        )
         result.issues.append(
             _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR",
                    f"material number {number} is used in both source systems "
@@ -349,12 +362,21 @@ def cleanse_partners(
                        "supplier has no GMP audit flag, confirm before cutover")
             )
 
+        # Recorded for any row whose identity is usable, accepted or
+        # not: the collision is a fact about the two extracts, and a
+        # record rejected for an unrelated reason would otherwise hide
+        # it until the wave that repairs the record. A row rejected
+        # *because* its name or country is missing is excluded - its
+        # identity is empty, so it would read as a different entity
+        # rather than an unknown one.
+        if row["NAME1"] and row["LAND1"]:
+            numbers[row[key_field]].append((key, partner_identity(row)))
+
         if reject:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
             seen[partner_identity(row)].append(key)
-            numbers[row[key_field]].append((key, partner_identity(row)))
 
     for identity, keys in seen.items():
         if len(keys) > 1:

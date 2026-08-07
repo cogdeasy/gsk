@@ -354,6 +354,31 @@ def test_a_lost_partner_record_fails_the_merge_arithmetic(result):
     assert not check.passed
 
 
+def test_a_collision_is_reported_even_if_one_side_is_rejected():
+    """The collision is a fact about the extracts, not about cleansing.
+
+    If seeing it depended on both sides surviving, an unrelated reject
+    on one side would let the other load under the bare number - the
+    outcome DQ-MAT-009 exists to prevent, deferred to whichever wave
+    repairs the rejected record.
+    """
+    core = _material("GEP", "000000000000100801", "CORE ADJUVANT")
+    vaccines = _material("GVP", "000000000000100801", "ANTIGEN BULK RSV")
+    vaccines["MHDHB"] = ""  # batch managed without shelf life: DQ-MAT-006
+
+    outcome = cleanse.cleanse_materials([core, vaccines])
+
+    collisions = outcome.issues_for("DQ-MAT-009")
+    assert len(collisions) == 1
+    assert "GEP/000000000000100801" in collisions[0].key
+    assert "GVP/000000000000100801" in collisions[0].key
+    # The surviving side is held; the other is already out on its own
+    # reject and must not be counted as rejected twice.
+    assert outcome.accepted == []
+    assert len(outcome.rejected) == 2
+    assert outcome.collision_holds == {"GEP/000000000000100801"}
+
+
 def test_stock_stranded_by_a_number_collision_says_so():
     """A held-back collision must not read as a missing master.
 
@@ -580,9 +605,17 @@ def test_reconciliation_detects_a_value_break(result):
         merged_partners=result.business_partners.merged_count,
         xref=result.business_partners.xref,
         products=result.product_result,
+        accepted_materials=result.cleansing["materials"].accepted,
     )
     assert not broken.passed
-    assert any(check.id.startswith("REC-FI-VAL") for check in broken.failed_checks)
+    # Named exactly: accepting any red check would let an unrelated
+    # break satisfy the test. Both of these follow from the one altered
+    # amount - the company code total moves, and the document it sits
+    # in no longer balances.
+    assert {check.id for check in broken.failed_checks} == {
+        "REC-FI-VAL-GB01-GBP",
+        "REC-FI-BAL-GB01",
+    }
 
 
 def test_pipeline_writes_the_expected_artefacts(tmp_path):
