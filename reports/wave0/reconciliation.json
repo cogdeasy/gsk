@@ -184,7 +184,7 @@
       "source_value": "43",
       "target_value": "43",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "invariant",
       "note": ""
     },
     {

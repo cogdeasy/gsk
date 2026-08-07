@@ -46,6 +46,29 @@ def split_source_key(key: str) -> tuple[str, str]:
     return (system, record)
 
 
+PARTNER_TYPE_OF = {"KNA1": "C", "LFA1": "V"}
+PARTNER_TYPES = frozenset(PARTNER_TYPE_OF.values())
+PARTNER_ACCOUNTS = {"C": "customer", "V": "vendor"}
+
+
+def partner_ref(source_system: str, partner_type: str, number: str) -> str:
+    """A reference to one customer or vendor record.
+
+    The number alone does not identify one. KNA1 and LFA1 are separate
+    number ranges by convention, not by constraint, so a customer and a
+    vendor in the same system can hold the same number and mean
+    different companies - which is the premise of this whole change,
+    applied to partners rather than materials. Keyed on the number
+    alone, the second record overwrites the first in the cross
+    reference and that company's open items post against the other
+    one's business partner.
+
+    The type is spelled as the open item extract spells it, `C` or `V`,
+    because that is the side with no say in the matter.
+    """
+    return f"{source_system}/{partner_type}/{number}"
+
+
 def material_key(source_system: str, material: str) -> tuple[str, str]:
     """The key a harmonisation decision is matched on.
 

@@ -8,7 +8,7 @@ import pytest
 
 from datamig import cleanse, extract, identity, mapping, pipeline
 from datamig.cleanse import Action
-from datamig.identity import partner_identity, source_key
+from datamig.identity import partner_identity, partner_ref, source_key
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WAVE0 = REPO_ROOT / "data" / "wave0"
@@ -52,7 +52,9 @@ def test_the_same_number_in_both_systems_is_two_records(result):
     assert len({row["NAME1"] for row in clashing}) == 2
 
     bps = {
-        result.business_partners.xref[source_key(row, "KUNNR")]
+        result.business_partners.xref[
+            partner_ref(row["SOURCE_SYSTEM"], "C", row["KUNNR"])
+        ]
         for row in clashing
     }
     assert len(bps) == 2
@@ -1251,9 +1253,9 @@ def test_every_migrated_partner_has_a_cross_reference(result):
     vendors = result.cleansing["vendors"].accepted
     xref = result.business_partners.xref
     for row in customers:
-        assert source_key(row, "KUNNR") in xref
+        assert partner_ref(row["SOURCE_SYSTEM"], "C", row["KUNNR"]) in xref
     for row in vendors:
-        assert source_key(row, "LIFNR") in xref
+        assert partner_ref(row["SOURCE_SYSTEM"], "V", row["LIFNR"]) in xref
 
 
 def test_open_items_carry_the_business_partner_number(result):
@@ -1376,17 +1378,16 @@ def test_two_systems_supplying_one_batch_is_caught(result):
     assert "REC-STK-KEY" in {check.id for check in broken.failed_checks}
 
 
-def test_a_number_reused_across_record_types_breaks_the_cross_reference():
-    """REC-BP-003 is the one partner check real data can fail.
+def test_a_number_reused_across_record_types_stays_two_partners():
+    """A customer and a vendor can hold one number in one system.
 
-    The cross reference is keyed on system and number with no record
-    type, so a customer and a vendor holding number 210045 in the same
-    system write one entry over the other and a migrated record loses
-    its link to its business partner. Nothing else in the pack sees it:
-    the counts balance, because both records are accepted and both
-    partners are created.
+    The ranges are disjoint by convention, not by constraint. Keyed on
+    the number alone, the second write replaced the first and that
+    company's open items posted against the other company's business
+    partner - wrong money against a real partner, which no count can
+    see because both records are accepted and both partners created.
     """
-    from datamig import mapping, reconcile
+    from datamig import mapping
 
     def _partner(number_field: str, number: str, name: str) -> dict[str, str]:
         return {
@@ -1399,20 +1400,26 @@ def test_a_number_reused_across_record_types_breaks_the_cross_reference():
         [_partner("KUNNR", "0000210045", "NHS SUPPLY CHAIN")],
         [_partner("LIFNR", "0000210045", "LONZA AG")],
     )
-    outcome = reconcile.build(
-        wave="wave0",
-        counts=[],
-        accepted_open_items=[],
-        loaded_open_items=[],
-        accepted_stock=[],
-        loaded_stock=[],
-        accepted_partners=2,
-        partner_identities=len(partners.partners),
-        business_partners=len(partners.partners),
-        merged_partners=partners.merged_count,
-        xref=partners.xref,
+    assert len(partners.xref) == 2
+    customer_bp = partners.xref["GEP/C/0000210045"]
+    vendor_bp = partners.xref["GEP/V/0000210045"]
+    assert customer_bp != vendor_bp
+
+    def _item(partner_type: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": "GEP", "BUKRS": "GB01", "BELNR": "1900000001",
+            "GJAHR": "2026", "BUZEI": "001", "BLART": "RV", "HKONT": "140000",
+            "PARTNER": "0000210045", "PARTNER_TYPE": partner_type, "SHKZG": "S",
+            "DMBTR": "100.00", "WAERS": "GBP", "BUDAT": "20260615",
+            "ZFBDT": "20260715",
+        }
+
+    assert mapping.map_open_item(_item("C"), partners.xref)["BusinessPartner"] == (
+        customer_bp
     )
-    assert "REC-BP-003" in {check.id for check in outcome.failed_checks}
+    assert mapping.map_open_item(_item("V"), partners.xref)["BusinessPartner"] == (
+        vendor_bp
+    )
 
 
 def test_the_printed_record_arithmetic_is_checked(result):
@@ -1482,6 +1489,11 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
     # deduplicates on.
     assert evidence["REC-MRG-001"] == reconcile.INVARIANT
     assert evidence["REC-BP-001"] == reconcile.INVARIANT
+    # One cross reference entry per accepted record, now that the entry
+    # is keyed on the account type as well as the number. Fixing the
+    # key is what made this an invariant: the collision it used to be
+    # able to catch cannot happen any more.
+    assert evidence["REC-BP-003"] == reconcile.INVARIANT
     # Goes and looks at the load file for the surviving product.
     assert evidence["REC-MRG-003"] == reconcile.COMPARED
     # Both sides off the load file, held against a rule the target must

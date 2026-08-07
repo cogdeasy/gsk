@@ -27,7 +27,9 @@ has two consequences that shape everything below:
 - **The number ranges are identical.** Customer 21xxxx and supplier
   51xxxx exist in both systems, denoting different companies. The
   numbers are not unique across the estate, so nothing downstream may
-  key on the source number alone.
+  key on the source number alone. Nor is the split between the two
+  ranges a constraint - it is a convention of the same template, so a
+  partner reference carries the account type as well as the system.
 
 ## What converges
 

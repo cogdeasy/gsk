@@ -21,10 +21,13 @@ from decimal import Decimal
 from enum import Enum
 
 from .identity import (
+    PARTNER_ACCOUNTS,
+    PARTNER_TYPES,
     PartnerIdentity,
     material_key,
     material_lookup_key,
     partner_identity,
+    partner_ref,
     source_key,
     strip_leading_zeros,
 )
@@ -696,13 +699,25 @@ def cleanse_open_items(
 
         for line in lines:
             partner = line["PARTNER"]
-            # Resolved within the line's own system: the same number in
-            # the other system is a different company.
-            if partner and source_key(line, "PARTNER") not in known_partners:
+            partner_type = line["PARTNER_TYPE"]
+            # Resolved within the line's own system and against its own
+            # account type: the same number in the other system is a
+            # different company, and in this one it may be a different
+            # company under the other type. An account type that is
+            # neither C nor V matches nothing and is held here too - a
+            # line that cannot say which of the two it means cannot be
+            # resolved to a business partner at all.
+            if partner and partner_ref(
+                line["SOURCE_SYSTEM"], partner_type, partner
+            ) not in known_partners:
                 reject_document = True
+                account = (
+                    f"{PARTNER_ACCOUNTS[partner_type]} " if partner_type in PARTNER_TYPES
+                    else f"account type '{partner_type}' "
+                )
                 result.issues.append(
                     _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
-                           f"partner {partner} is not in the migrated master "
+                           f"{account}{partner} is not in the migrated master "
                            f"data for {system}")
                 )
             if partner and not line["ZFBDT"]:

@@ -449,6 +449,7 @@ def build(
 
     reconciliation.checks.append(
         Check(
+            evidence=INVARIANT,
             id="REC-BP-003",
             description="cross reference covers every migrated partner",
             source_value=str(accepted_partners),

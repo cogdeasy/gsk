@@ -21,10 +21,12 @@ from dataclasses import dataclass, field
 from .cleanse import UOM_ISO
 from .extract import HarmonisationDecision
 from .identity import (
+    PARTNER_TYPE_OF,
     PartnerIdentity,
     material_key,
     material_lookup_key,
     partner_identity,
+    partner_ref,
     source_key,
     split_source_key,
     strip_leading_zeros,
@@ -343,7 +345,9 @@ def convert_to_business_partners(
         partner.company_codes.add(row["BUKRS"])
         partner.source_systems.add(row["SOURCE_SYSTEM"])
         partner.source_customers.append(source_key(row, "KUNNR"))
-        result.xref[source_key(row, "KUNNR")] = partner.bp_number
+        result.xref[
+            partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["KNA1"], row["KUNNR"])
+        ] = partner.bp_number
 
     for row in vendors:
         partner = get_partner(row)
@@ -351,13 +355,19 @@ def convert_to_business_partners(
         partner.company_codes.add(row["BUKRS"])
         partner.source_systems.add(row["SOURCE_SYSTEM"])
         partner.source_vendors.append(source_key(row, "LIFNR"))
-        result.xref[source_key(row, "LIFNR")] = partner.bp_number
+        result.xref[
+            partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["LFA1"], row["LIFNR"])
+        ] = partner.bp_number
 
     return result
 
 
 def map_open_item(row: dict[str, str], xref: dict[str, str]) -> dict[str, str]:
-    partner_key = source_key(row, "PARTNER") if row["PARTNER"] else ""
+    partner_key = (
+        partner_ref(row["SOURCE_SYSTEM"], row["PARTNER_TYPE"], row["PARTNER"])
+        if row["PARTNER"]
+        else ""
+    )
     return {
         "SourceSystem": row["SOURCE_SYSTEM"],
         "CompanyCode": row["BUKRS"],

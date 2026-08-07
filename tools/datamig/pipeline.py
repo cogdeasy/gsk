@@ -15,9 +15,11 @@ from pathlib import Path
 from . import cleanse, extract, load, mapping, reconcile
 from .cleanse import CleanseResult
 from .identity import (
+    PARTNER_TYPE_OF,
     material_key,
     material_lookup_key,
     partner_identity,
+    partner_ref,
     source_key,
 )
 from .reconcile import ObjectCounts, Reconciliation
@@ -84,8 +86,16 @@ def run(
     )
     vendors = cleanse.cleanse_partners(datasets["vendors"].rows, "vendors", "LIFNR")
 
-    known_partners = {source_key(row, "KUNNR") for row in customers.accepted}
-    known_partners |= {source_key(row, "LIFNR") for row in vendors.accepted}
+    # Typed, because an open item names a customer or a vendor and the
+    # two number ranges are only disjoint by convention.
+    known_partners = {
+        partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["KNA1"], row["KUNNR"])
+        for row in customers.accepted
+    }
+    known_partners |= {
+        partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["LFA1"], row["LIFNR"])
+        for row in vendors.accepted
+    }
     open_items = cleanse.cleanse_open_items(
         datasets["open_items"].rows, known_partners
     )

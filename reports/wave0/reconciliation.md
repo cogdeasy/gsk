@@ -50,7 +50,7 @@ Both ECC systems load into one S/4HANA client. These are the records each contri
 | REC-ARI-batch_stock | batch_stock: extracted - rejected - merged equals the load file | 32 - 11 - 0 = 21 | 21 rows loaded | invariant | PASS |  |
 | REC-BP-001 | one business partner per distinct legal entity | 33 identities in 43 records | 33 BPs in the load file | invariant | PASS | 10 records merged into a shared BP |
 | REC-BP-002 | every loaded open item partner resolves to a BP | 18 | 18 | asserted | PASS |  |
-| REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | compared | PASS |  |
+| REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | invariant | PASS |  |
 | REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | invariant | PASS | 7 BPs are held in both source systems |
 | REC-MRG-002 | material records minus harmonisations equals products | 25 materials - 3 harmonised | 22 products | invariant | PASS | 6 rejected before mapping |
 | REC-MRG-003 | every harmonised material resolves to a loaded product | 3 survivors named by decisions | 3 in the load file | compared | PASS |  |
