@@ -172,9 +172,9 @@ def _summary(result) -> str:
     # is cross-system by definition and pricing one side of it would be
     # a wrong number. Both are right; adjacent and unlabelled, one of
     # them is read as the other.
-    if result.is_filtered and result.estate is not None:
+    if result.is_partial_view:
         lines.append(
-            f"  (this view of a {len(result.estate)}-object estate; the "
+            f"  (this view of a {len(result.estate or ())}-object estate; the "
             "convergence figures below are the whole group's)"
         )
 

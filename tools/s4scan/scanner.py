@@ -222,7 +222,15 @@ class ScanResult:
     _view_filters: list[Predicate] = field(default_factory=list, repr=False)
 
     @property
-    def is_filtered(self) -> bool:
+    def is_partial_view(self) -> bool:
+        """Part of an estate the scan is still reasoning about.
+
+        Not the same question as whether the scan was filtered at all,
+        which is why it is not called that: a wave narrows what the
+        scan is *about*, so what it excluded stops being the estate,
+        and a wave-filtered scan is deliberately not a partial view of
+        anything.
+        """
         return self.estate is not None
 
     def filter(

@@ -453,7 +453,7 @@ def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
         for obj in group.objects
     }
     result.filter(view=lambda obj: obj.path in in_groups)
-    assert result.is_filtered
+    assert result.is_partial_view
     assert not result.groups_extend_beyond_view()
 
 
@@ -481,7 +481,7 @@ def test_a_view_holding_every_priced_group_claims_the_days_as_its_own():
     assert hidden not in priced
     result.filter(view=lambda obj: obj.path in priced or obj.path != hidden)
 
-    assert result.is_filtered
+    assert result.is_partial_view
     assert not result.groups_extend_beyond_view()
 
 
