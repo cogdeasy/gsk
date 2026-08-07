@@ -4,6 +4,7 @@ import pytest
 
 from datamig import cleanse, extract, mapping, pipeline
 from datamig.cleanse import Action
+from datamig.identity import partner_identity
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WAVE0 = REPO_ROOT / "data" / "wave0"
@@ -102,6 +103,29 @@ def test_duplicate_vendor_across_company_codes_is_one_partner(result):
     assert lonza.company_codes == {"GB01", "BE01"}
 
 
+def test_merge_warnings_describe_the_merges_the_load_performs(result):
+    for object_name, prefix, key_field in (
+        ("customers", "DQ-CUS", "KUNNR"),
+        ("vendors", "DQ-VEN", "LIFNR"),
+    ):
+        cleansed = result.cleansing[object_name]
+        warned = {
+            key.strip()
+            for issue in cleansed.issues_for(f"{prefix}-007")
+            for key in issue.key.split(",")
+        }
+        accepted = cleansed.accepted
+        merged = {
+            row[key_field]
+            for row in accepted
+            if sum(
+                1 for other in accepted
+                if partner_identity(other) == partner_identity(row)
+            ) > 1
+        }
+        assert warned == merged
+
+
 def test_every_migrated_partner_has_a_cross_reference(result):
     customers = result.cleansing["customers"].accepted
     vendors = result.cleansing["vendors"].accepted
@@ -123,6 +147,21 @@ def test_reconciliation_passes_for_the_reference_wave(result):
     assert result.reconciliation.failed_checks == []
 
 
+def test_count_check_fails_when_a_record_never_reaches_the_load():
+    fresh = pipeline.run(
+        wave="wave0", source_dir=WAVE0, out_dir=Path("/tmp/unused"), write_files=False
+    )
+    materials = next(
+        count for count in fresh.reconciliation.counts
+        if count.object_name == "materials"
+    )
+    dropped = sorted(materials.target_keys)[0]
+    materials.target_keys = materials.target_keys - {dropped}
+
+    assert materials.missing == frozenset({dropped})
+    assert not materials.balanced
+
+
 def test_reconciliation_detects_a_value_break(result):
     tampered = [dict(row) for row in result.open_items]
     tampered[0]["AmountInCompanyCodeCurrency"] = "1.00"
@@ -138,6 +177,7 @@ def test_reconciliation_detects_a_value_break(result):
         loaded_stock=result.stock,
         accepted_partners=len(result.cleansing["customers"].accepted)
         + len(result.cleansing["vendors"].accepted),
+        partner_identities=len(result.business_partners.partners),
         business_partners=len(result.business_partners.partners),
         merged_partners=result.business_partners.merged_count,
         xref=result.business_partners.xref,

@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
+
+from .identity import PartnerIdentity, partner_identity
 
 ISO_COUNTRIES = {
     "GB", "DE", "FR", "BE", "IE", "US", "DK", "TZ", "SG", "CH",
@@ -168,7 +171,7 @@ def cleanse_partners(
 ) -> CleanseResult:
     result = CleanseResult(object_name=object_name)
     prefix = "DQ-CUS" if object_name == "customers" else "DQ-VEN"
-    seen: dict[tuple[str, str, str], list[str]] = defaultdict(list)
+    seen: dict[PartnerIdentity, list[str]] = defaultdict(list)
 
     for row in rows:
         key = row[key_field]
@@ -213,12 +216,11 @@ def cleanse_partners(
                        "supplier has no GMP audit flag, confirm before cutover")
             )
 
-        seen[(row["NAME1"], row["LAND1"], row["PSTLZ"])].append(key)
-
         if reject:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
+            seen[partner_identity(row)].append(key)
 
     for identity, keys in seen.items():
         if len(keys) > 1:
@@ -244,9 +246,15 @@ def cleanse_open_items(
         key = f"{bukrs}/{belnr}/{gjahr}"
         reject_document = False
 
-        debit = sum(float(line["DMBTR"]) for line in lines if line["SHKZG"] == "S")
-        credit = sum(float(line["DMBTR"]) for line in lines if line["SHKZG"] == "H")
-        if round(debit - credit, 2) != 0:
+        debit = sum(
+            (Decimal(line["DMBTR"]) for line in lines if line["SHKZG"] == "S"),
+            Decimal(0),
+        )
+        credit = sum(
+            (Decimal(line["DMBTR"]) for line in lines if line["SHKZG"] == "H"),
+            Decimal(0),
+        )
+        if debit != credit:
             reject_document = True
             result.issues.append(
                 _issue("DQ-FI-001", Action.REJECT, "open_items", key, "DMBTR",

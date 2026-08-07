@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import cleanse, extract, load, mapping, reconcile
 from .cleanse import Action, CleanseResult
+from .identity import partner_identity
 from .reconcile import ObjectCounts, Reconciliation
 
 
@@ -37,6 +38,10 @@ class PipelineResult:
 
 def _warnings(result: CleanseResult) -> int:
     return result.counts_by_action()[Action.WARN.value]
+
+
+def _keys(rows: list[dict[str, str]], *fields: str) -> frozenset[str]:
+    return frozenset("/".join(row[field] for field in fields) for row in rows)
 
 
 def run(
@@ -87,29 +92,69 @@ def run(
         mapping.map_stock(row, accepted_materials) for row in batch_stock.accepted
     ]
 
+    # The target side of each count check is read off the rows that will
+    # be written, never inferred from the accepted records, so a mapping
+    # that drops, duplicates or invents a record breaks the check.
+    bp_rows = [partner.as_row() for partner in partners.partners]
+    xref_rows = partners.xref_rows()
+    loaded_sources = {
+        source_type: frozenset(
+            row["SourceId"] for row in xref_rows if row["SourceType"] == source_type
+        )
+        for source_type in ("KNA1", "LFA1")
+    }
+
     counts = [
         ObjectCounts(
             "materials", materials.source_count, len(materials.rejected),
             len(result.products), _warnings(materials),
+            source_keys=frozenset(
+                mapping.strip_leading_zeros(row["MATNR"]) for row in materials.accepted
+            ),
+            target_keys=_keys(result.products, "Product"),
         ),
         ObjectCounts(
             "customers", customers.source_count, len(customers.rejected),
             len(customers.accepted), _warnings(customers),
+            source_keys=_keys(customers.accepted, "KUNNR"),
+            target_keys=loaded_sources["KNA1"],
         ),
         ObjectCounts(
             "vendors", vendors.source_count, len(vendors.rejected),
             len(vendors.accepted), _warnings(vendors),
+            source_keys=_keys(vendors.accepted, "LIFNR"),
+            target_keys=loaded_sources["LFA1"],
         ),
         ObjectCounts(
             "open_items", open_items.source_count, len(open_items.rejected),
             len(result.open_items), _warnings(open_items),
+            source_keys=_keys(open_items.accepted, "BUKRS", "BELNR", "GJAHR", "BUZEI"),
+            target_keys=_keys(
+                result.open_items, "CompanyCode", "AccountingDocument",
+                "FiscalYear", "AccountingDocumentItem",
+            ),
         ),
         ObjectCounts(
             "batch_stock", batch_stock.source_count, len(batch_stock.rejected),
             len(result.stock), _warnings(batch_stock),
+            source_keys=frozenset(
+                "/".join(
+                    (
+                        row["WERKS"],
+                        mapping.strip_leading_zeros(row["MATNR"]),
+                        row["LGORT"],
+                        row["CHARG"],
+                    )
+                )
+                for row in batch_stock.accepted
+            ),
+            target_keys=_keys(
+                result.stock, "Plant", "Product", "StorageLocation", "Batch"
+            ),
         ),
     ]
 
+    accepted_partner_rows = customers.accepted + vendors.accepted
     result.reconciliation = reconcile.build(
         wave=wave,
         counts=counts,
@@ -117,8 +162,11 @@ def run(
         loaded_open_items=result.open_items,
         accepted_stock=batch_stock.accepted,
         loaded_stock=result.stock,
-        accepted_partners=len(customers.accepted) + len(vendors.accepted),
-        business_partners=len(partners.partners),
+        accepted_partners=len(accepted_partner_rows),
+        partner_identities=len(
+            {partner_identity(row) for row in accepted_partner_rows}
+        ),
+        business_partners=len({row["BusinessPartner"] for row in bp_rows}),
         merged_partners=partners.merged_count,
         xref=partners.xref,
     )
@@ -150,10 +198,9 @@ def _write(result: PipelineResult, partners: mapping.BusinessPartnerResult) -> N
         result.written.append(
             load.write_exceptions(out_dir, name, cleanse_result.issues)
         )
-        if cleanse_result.rejected:
-            result.written.append(
-                load.write_rejects(out_dir, name, cleanse_result.rejected)
-            )
+        result.written.append(
+            load.write_rejects(out_dir, name, cleanse_result.rejected)
+        )
 
     reconciliation_path = out_dir / "reconciliation.md"
     reconciliation_path.write_text(

@@ -40,15 +40,40 @@ class Check:
 
 @dataclass
 class ObjectCounts:
+    """Record counts for one migration object.
+
+    ``source_keys`` are the keys of the records accepted for the load,
+    counted on the ECC extract. ``target_keys`` are the keys actually
+    present in the emitted target rows. Comparing the two is what makes
+    the count check capable of failing: a mapping that drops, duplicates
+    or invents a record breaks it.
+    """
+
     object_name: str
     extracted: int
     rejected: int
     loaded: int
     warnings: int = 0
+    source_keys: frozenset[str] = frozenset()
+    target_keys: frozenset[str] = frozenset()
+
+    @property
+    def missing(self) -> frozenset[str]:
+        """Accepted on the ECC side but absent from the load file."""
+        return self.source_keys - self.target_keys
+
+    @property
+    def unexpected(self) -> frozenset[str]:
+        """Present in the load file with no accepted ECC record."""
+        return self.target_keys - self.source_keys
+
+    @property
+    def duplicated(self) -> int:
+        return self.loaded - len(self.target_keys)
 
     @property
     def balanced(self) -> bool:
-        return self.extracted - self.rejected == self.loaded
+        return not self.missing and not self.unexpected and self.duplicated == 0
 
 
 @dataclass
@@ -78,6 +103,12 @@ def _sum_by(rows, key_fields: tuple[str, ...], value_field: str) -> dict[tuple, 
     return dict(totals)
 
 
+def _sample(keys: frozenset[str], limit: int = 3) -> str:
+    ordered = sorted(keys)
+    shown = ", ".join(ordered[:limit])
+    return shown if len(ordered) <= limit else f"{shown}, ..."
+
+
 def build(
     wave: str,
     counts: list[ObjectCounts],
@@ -86,6 +117,7 @@ def build(
     accepted_stock: list[dict[str, str]],
     loaded_stock: list[dict[str, str]],
     accepted_partners: int,
+    partner_identities: int,
     business_partners: int,
     merged_partners: int,
     xref: dict[str, str],
@@ -93,24 +125,32 @@ def build(
     reconciliation = Reconciliation(wave=wave, counts=counts)
 
     for count in counts:
+        notes: list[str] = []
+        if count.missing:
+            notes.append(f"{len(count.missing)} not loaded: {_sample(count.missing)}")
+        if count.unexpected:
+            notes.append(f"{len(count.unexpected)} unknown: {_sample(count.unexpected)}")
+        if count.duplicated:
+            notes.append(f"{count.duplicated} duplicate rows")
         reconciliation.checks.append(
             Check(
                 id=f"REC-CNT-{count.object_name}",
-                description=f"{count.object_name}: extracted - rejected = loaded",
-                source_value=f"{count.extracted} - {count.rejected}",
-                target_value=str(count.loaded),
+                description=f"{count.object_name}: every accepted record loaded once",
+                source_value=f"{len(count.source_keys)} accepted keys",
+                target_value=f"{len(count.target_keys)} keys in the load file",
                 passed=count.balanced,
+                note="; ".join(notes),
             )
         )
 
     reconciliation.checks.append(
         Check(
             id="REC-BP-001",
-            description="business partners created = accepted partners - merges",
-            source_value=f"{accepted_partners} - {merged_partners}",
-            target_value=str(business_partners),
-            passed=accepted_partners - merged_partners == business_partners,
-            note="customer/vendor records for the same legal entity share one BP",
+            description="one business partner per distinct legal entity",
+            source_value=f"{partner_identities} identities in {accepted_partners} records",
+            target_value=f"{business_partners} BPs in the load file",
+            passed=partner_identities == business_partners,
+            note=f"{merged_partners} records merged into a shared BP",
         )
     )
 
