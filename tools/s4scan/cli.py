@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .inventory import SOURCE_SYSTEMS, Inventory
+from .inventory import SOURCE_SYSTEMS, Inventory, InventoryError
 from .report import (
     build_backlog,
     by_source_system,
@@ -87,7 +87,14 @@ def _run_scan(args: argparse.Namespace) -> int:
     inventory = None
     inventory_path = Path(args.inventory)
     if inventory_path.exists():
-        inventory = Inventory.load(inventory_path)
+        # A mis-edited inventory is an operator's mistake to correct,
+        # and the error already says which group spans which waves.
+        # Reaching them as a traceback buries that in a stack.
+        try:
+            inventory = Inventory.load(inventory_path)
+        except InventoryError as error:
+            print(str(error), file=sys.stderr)
+            return 2
     elif args.inventory != DEFAULT_INVENTORY:
         print(f"inventory not found: {inventory_path}", file=sys.stderr)
         return 2

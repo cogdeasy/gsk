@@ -183,8 +183,10 @@ There is a nearer boundary too. Some checks derive both of their sides
 from the same data - the record arithmetic for materials, open items
 and stock holds unless mapping itself is broken, because mapping emits
 one row per accepted record or stops. Those are worth running and are
-not evidence about the load, so the pack labels every check `compared`
-or `invariant` rather than leaving a reader to count passes.
+not evidence about the load, so the pack labels every check
+`compared`, `asserted` - both sides read off the load file, held
+against a rule the target must satisfy - or `invariant`, rather than
+leaving a reader to count passes.
 
 ## Layout
 

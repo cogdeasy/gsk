@@ -694,6 +694,41 @@ def test_a_survivor_in_the_other_system_is_not_a_chain():
     assert not outcome.issues_for("DQ-MAT-010")
 
 
+def test_a_target_retired_by_the_other_system_is_still_a_chain():
+    """The target product number is not qualified by source system.
+
+    GVP/700301 merges into 100801, which the only record carrying that
+    number - GEP's - is itself merging away. Product 100801 will not
+    exist, and the reason is the other decision, wherever it was taken.
+    """
+    targets = {
+        ("GEP", "000000000000100801"): "100236",
+        ("GVP", "000000000000700301"): "100801",
+    }
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GVP", "000000000000700301", "ADJUVANT WAVRE"),
+            _material("GEP", "000000000000100236", "CORE ANTIGEN"),
+        ],
+        harmonisation_targets=targets,
+    )
+    chained = outcome.issues_for("DQ-MAT-011")
+    assert [issue.key for issue in chained] == ["GVP/000000000000700301"]
+    assert not outcome.issues_for("DQ-MAT-010")
+
+
+def test_two_materials_without_a_description_are_not_duplicates():
+    """An exception naming '' is one nobody can act on or close."""
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GEP", "000000000000100801", ""),
+            _material("GVP", "000000000000700301", ""),
+        ]
+    )
+    assert not outcome.issues_for("DQ-MAT-008")
+
+
 def test_a_merge_across_two_base_units_is_refused():
     """Stock keeps its own master's unit but follows the survivor."""
     targets = {("GVP", "000000000000700301"): "100251"}
@@ -1285,8 +1320,19 @@ def test_the_pack_says_which_checks_could_actually_have_failed(result):
     assert evidence["REC-MRG-002"] == reconcile.INVARIANT
     # Goes and looks at the load file for the surviving product.
     assert evidence["REC-MRG-003"] == reconcile.COMPARED
+    # Both sides off the load file, held against a rule the target must
+    # satisfy. Bad input fails them, so they are not invariants - but
+    # they never look at the extract, so they are not comparisons.
+    assert evidence["REC-STK-KEY"] == reconcile.ASSERTED
+    assert evidence["REC-BP-002"] == reconcile.ASSERTED
     assert all(
-        check.evidence in (reconcile.COMPARED, reconcile.INVARIANT)
+        check.evidence == reconcile.ASSERTED
+        for check in result.reconciliation.checks
+        if check.id.startswith("REC-FI-BAL-")
+    )
+    assert all(
+        check.evidence
+        in (reconcile.COMPARED, reconcile.ASSERTED, reconcile.INVARIANT)
         for check in result.reconciliation.checks
     )
 

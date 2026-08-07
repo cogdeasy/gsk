@@ -175,7 +175,7 @@
       "source_value": "18",
       "target_value": "18",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -283,7 +283,7 @@
       "source_value": "debit 3224000.00",
       "target_value": "credit 3224000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -292,7 +292,7 @@
       "source_value": "debit 9036000.00",
       "target_value": "credit 9036000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -301,7 +301,7 @@
       "source_value": "debit 1442000.00",
       "target_value": "credit 1442000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -310,7 +310,7 @@
       "source_value": "debit 2900550.75",
       "target_value": "credit 2900550.75",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -319,7 +319,7 @@
       "source_value": "debit 612000.00",
       "target_value": "credit 612000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -328,7 +328,7 @@
       "source_value": "debit 6995000.00",
       "target_value": "credit 6995000.00",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     },
     {
@@ -391,7 +391,7 @@
       "source_value": "21 rows",
       "target_value": "21 distinct product/plant/sloc/batch",
       "status": "PASS",
-      "evidence": "compared",
+      "evidence": "asserted",
       "note": ""
     }
   ]

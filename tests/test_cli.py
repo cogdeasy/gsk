@@ -20,6 +20,36 @@ def test_s4scan_rules_command_lists_the_catalogue(capsys):
     assert "SI-GXP-001" in output
 
 
+def test_s4scan_reports_a_mis_edited_inventory_as_an_operator_error(
+    tmp_path, capsys
+):
+    """The message names the group and the waves; a stack trace buries it."""
+    rows = (REPO_ROOT / "estate" / "inventory.csv").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    header = rows[0].split(",")
+    group = header.index("convergence_group")
+    wave = header.index("wave")
+    edited = [rows[0]]
+    moved = False
+    for row in rows[1:]:
+        cells = row.split(",")
+        if cells[group] and not moved:
+            cells[wave] = "wave9"
+            moved = True
+        edited.append(",".join(cells))
+    inventory = tmp_path / "inventory.csv"
+    inventory.write_text("\n".join(edited) + "\n", encoding="utf-8")
+
+    exit_code = s4scan_cli.main(
+        ["scan", "abap/ecc", "--inventory", str(inventory)]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "wave9" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_s4scan_fail_on_blocker_gates_the_legacy_estate(capsys):
     exit_code = s4scan_cli.main(["scan", "abap/ecc", "--fail-on", "blocker"])
     capsys.readouterr()

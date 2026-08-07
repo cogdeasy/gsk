@@ -40,6 +40,13 @@ COMPARED = "compared"
 # proves. `AGENTS.md`: a check that cannot fail is not a check.
 INVARIANT = "invariant"
 
+# A check with both sides read off the load file, holding it against a
+# rule the target must satisfy: a key that is unique, a document that
+# balances, a reference that resolves. Bad input is how it fails, so it
+# is not an invariant - but it never looks at the extract, so it is no
+# evidence that the extract arrived whole either.
+ASSERTED = "asserted"
+
 
 @dataclass(frozen=True)
 class Check:
@@ -417,6 +424,7 @@ def build(
     ]
     reconciliation.checks.append(
         Check(
+            evidence=ASSERTED,
             id="REC-BP-002",
             description="every loaded open item partner resolves to a BP",
             source_value=str(len([r for r in loaded_open_items if r["SourcePartner"]])),
@@ -482,6 +490,7 @@ def build(
     for company_code, (debit, credit) in sorted(debit_credit.items()):
         reconciliation.checks.append(
             Check(
+                evidence=ASSERTED,
                 id=f"REC-FI-BAL-{company_code}",
                 description=f"loaded open items balance in {company_code}",
                 source_value=f"debit {debit:.2f}",
@@ -522,6 +531,7 @@ def build(
     )
     reconciliation.checks.append(
         Check(
+            evidence=ASSERTED,
             id="REC-STK-KEY",
             description="initial stock is unique on the S/4HANA key",
             source_value=f"{len(target_keys)} rows",
@@ -632,9 +642,12 @@ def to_markdown(reconciliation: Reconciliation) -> str:
         "`Evidence` says what a pass is worth. **compared** counts the "
         "two sides from different things - the ECC extract and the rows "
         "written to the target - so it can fail on real data. "
-        "**invariant** derives both sides from the same data: it catches "
-        "the tooling breaking, not the data being wrong, and proves "
-        "nothing about the load on its own."
+        "**asserted** reads both sides off the load file and holds it "
+        "against a rule the target must satisfy: it fails on bad input, "
+        "but never looks at the extract. **invariant** derives both "
+        "sides from the same data: it catches the tooling breaking, not "
+        "the data being wrong, and proves nothing about the load on its "
+        "own."
     )
     lines.append("")
     lines.append(

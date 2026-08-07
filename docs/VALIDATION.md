@@ -53,7 +53,12 @@ evidence pack for a load:
 
 Each check states what a pass is worth. A **compared** check counts
 its two sides from different things - the ECC extract and the rows
-written to the target - so it can fail on real data. An **invariant**
+written to the target - so it can fail on real data. An **asserted**
+check reads both sides off the load file and holds it against a rule
+the target must satisfy - a key that is unique, a document that
+balances, a partner reference that resolves. Bad input is how it
+fails, so it is not an invariant, but it never looks at the extract
+and is no evidence that the extract arrived whole. An **invariant**
 derives both sides from the same data: it holds unless the tooling
 itself is broken, which is worth knowing but is not evidence about the
 load. The record arithmetic for materials, open items and stock is an

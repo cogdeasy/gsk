@@ -224,7 +224,12 @@ def cleanse_materials(
             )
             row["MAKTX"] = row["MAKTX"].upper()
 
-        descriptions[row["MAKTX"]].append(row)
+        # Only a real description. Two records that both arrive with
+        # none are not duplicates of each other, and an exception
+        # reading "duplicate material description ''" is one a steward
+        # can neither act on nor close.
+        if row["MAKTX"]:
+            descriptions[row["MAKTX"]].append(row)
         # Keyed on the number the material would load under, not the
         # one it was extracted with: the target product number is the
         # bare MATNR, so 100801 and 000000000000100801 are the same
