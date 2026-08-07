@@ -326,7 +326,11 @@ def _reject_undecided_collisions(
     """
     colliding: list[dict[str, str]] = []
     held: set[str] = set()
-    accepted = {source_key(row, "MATNR") for row in result.accepted}
+    # Rows are tracked by identity, not by key. A number repeated inside
+    # one extract - the case below - gives two rows the same source key,
+    # so a key-based test would move a row another rule had already
+    # rejected a second time and count it twice in the evidence pack.
+    accepted = {id(row) for row in result.accepted}
 
     for number, rows in numbers.items():
         undecided = [
@@ -349,10 +353,7 @@ def _reject_undecided_collisions(
         # Only what is still in the load can be held back; a row another
         # rule already rejected is named in the message and left where
         # it is, so it is not counted as rejected twice.
-        colliding.extend(
-            row for row in undecided
-            if source_key(row, "MATNR") in accepted
-        )
+        colliding.extend(row for row in undecided if id(row) in accepted)
         result.issues.append(
             _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR",
                    f"material number {number} is used {scope} for different "
@@ -369,10 +370,9 @@ def _reject_undecided_collisions(
     if not colliding:
         return
 
-    rejected = {source_key(row, "MATNR") for row in colliding}
+    rejected = {id(row) for row in colliding}
     result.accepted[:] = [
-        row for row in result.accepted
-        if source_key(row, "MATNR") not in rejected
+        row for row in result.accepted if id(row) not in rejected
     ]
     result.rejected.extend(colliding)
 
@@ -506,7 +506,13 @@ def cleanse_partners(
         # identity is empty, so it would read as a different entity
         # rather than an unknown one.
         if row["NAME1"] and row["LAND1"]:
-            numbers[row[key_field]].append((key, partner_identity(row)))
+            # Unpadded, like the material collision rule: KUNNR and
+            # LIFNR are CHAR10 and the two extract programs need not
+            # pad alike, so grouping on the number as written would
+            # miss GEP's 0000210045 against GVP's 210045.
+            numbers[strip_leading_zeros(row[key_field])].append(
+                (key, partner_identity(row))
+            )
 
         if reject:
             result.rejected.append(row)
@@ -516,7 +522,7 @@ def cleanse_partners(
 
     for identity, keys in seen.items():
         if len(keys) > 1:
-            systems = {key.split("/")[0] for key in keys}
+            systems = {key.split("/", 1)[0] for key in keys}
             scope = (
                 "across both source systems" if len(systems) > 1
                 else f"within {next(iter(systems))}"
@@ -535,7 +541,7 @@ def cleanse_partners(
     for number, entries in numbers.items():
         keys = [key for key, _ in entries]
         identities = {identity for _, identity in entries}
-        if len({key.split("/")[0] for key in keys}) > 1 and len(identities) > 1:
+        if len({key.split("/", 1)[0] for key in keys}) > 1 and len(identities) > 1:
             names = sorted(identity[0] for identity in identities)
             result.issues.append(
                 _issue(f"{prefix}-008", Action.WARN, object_name, ", ".join(keys),
@@ -660,7 +666,11 @@ def cleanse_batch_stock(
                        "batch stock for a material that is not batch managed")
             )
 
-        if material is not None and material["MEINS"] != row["MEINS"]:
+        # Case folded on the stock side because the master side has
+        # already been folded by DQ-MAT-001. Comparing the two as
+        # written makes 'kg' against 'KG' a unit decision for a steward,
+        # and there is no decision to take.
+        if material is not None and material["MEINS"] != row["MEINS"].upper():
             reject = True
             result.issues.append(
                 _issue("DQ-STK-005", Action.REJECT, "batch_stock", key, "MEINS",

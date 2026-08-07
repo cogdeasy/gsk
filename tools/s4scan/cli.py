@@ -178,7 +178,7 @@ def _summary(result) -> str:
             f"convergence groups    : {len(convergence)} "
             f"({avoided} engineer-days avoided by building one object)"
         )
-        if result.is_filtered:
+        if result.groups_extend_beyond_view():
             lines.append(
                 "                        whole-group days; the saving is "
                 "the programme's, not this view's"

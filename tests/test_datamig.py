@@ -144,8 +144,42 @@ def test_cross_system_partners_are_reported_as_merge_evidence(result):
 def test_a_number_reused_across_systems_raises_a_collision_warning(result):
     issues = result.cleansing["customers"].issues_for("DQ-CUS-008")
     assert issues
-    assert "0000210045" in issues[0].message
+    # The number is grouped and reported unpadded, as material
+    # collisions are, so the two extracts' padding cannot hide a reuse.
+    # The key keeps each record as its own extract spells it.
+    assert "210045" in issues[0].message
+    assert "GEP/0000210045" in issues[0].key
+    assert "GVP/0000210045" in issues[0].key
     assert issues[0].action is Action.WARN
+
+
+def test_a_number_padded_differently_by_each_system_still_collides():
+    """The systems' extract programs need not pad alike.
+
+    Grouping on the number as written would report two unrelated
+    companies as distinct records that happen to share nothing, and the
+    reuse would surface after cutover instead of before it.
+    """
+    def customer(system: str, number: str, name: str) -> dict[str, str]:
+        return {
+            "SOURCE_SYSTEM": system, "KUNNR": number, "NAME1": name,
+            "LAND1": "GB", "PSTLZ": "TW8 9GS", "STCEG": "", "ORT01": "London",
+            "STRAS": "1 Test Way", "BUKRS": "1000", "SPRAS": "E",
+            "KTOKD": "0001", "LOEVM": "", "ZZ_GXP_RELEVANT": "X",
+        }
+
+    outcome = cleanse.cleanse_partners(
+        [
+            customer("GEP", "0000210045", "NHS SUPPLY CHAIN"),
+            customer("GVP", "210045", "INSTITUT PASTEUR DE DAKAR"),
+        ],
+        object_name="customers",
+        key_field="KUNNR",
+    )
+
+    collisions = outcome.issues_for("DQ-CUS-008")
+    assert len(collisions) == 1
+    assert "210045" in collisions[0].message
 
 
 def test_harmonised_materials_collapse_into_one_product(result):
@@ -790,6 +824,28 @@ def test_stock_stranded_by_a_number_collision_says_so():
     assert not stock.issues_for("DQ-STK-001")
 
 
+def test_a_record_held_by_two_rules_is_rejected_once():
+    """The evidence pack has to count each physical record once.
+
+    Two rows carrying one number inside a single extract share a source
+    key, so keying the "is this still in the load" test on it moves a
+    row another rule already rejected a second time. Extracted and
+    rejected both come out one too high and a steward gets the same
+    record twice.
+    """
+    clean = _material("GVP", "000000000000700401", "ANTIGEN BULK A")
+    already_rejected = _material("GVP", "000000000000700401", "ANTIGEN BULK B")
+    already_rejected["MHDHB"] = ""
+
+    outcome = cleanse.cleanse_materials([clean, already_rejected])
+
+    assert outcome.issues_for("DQ-MAT-006")
+    assert outcome.issues_for("DQ-MAT-009")
+    assert outcome.source_count == 2
+    assert len(outcome.rejected) == 2
+    assert [id(row) for row in outcome.rejected].count(id(already_rejected)) == 1
+
+
 def test_stock_finds_its_master_however_the_extract_padded_it():
     """Two extracts, two programs, no guarantee they pad alike.
 
@@ -1218,6 +1274,52 @@ def test_stock_base_unit_comes_from_the_material_master():
         stock, {identity.material_lookup_key(material): material}
     )
     assert row["BaseUnit"] == "KGM"
+
+
+def test_a_lower_case_stock_unit_is_not_a_unit_decision():
+    """DQ-MAT-001 folds the master's unit; the stock extract is raw.
+
+    Comparing the two as written turns 'kg' against 'KG' into a reject
+    and asks a steward for a decision between a unit and itself.
+    """
+    materials = cleanse.cleanse_materials(
+        [_material("GVP", "000000000000700304", unit="kg")]
+    )
+    stock = cleanse.cleanse_batch_stock(
+        [
+            {
+                "SOURCE_SYSTEM": "GVP", "WERKS": "BE32",
+                "MATNR": "000000000000700304", "CHARG": "AB2600099",
+                "LGORT": "0001", "CLABS": "10.000", "CINSM": "0.000",
+                "CSPEM": "0.000", "MEINS": "kg",
+                "VFDAT": "20270101", "HSDAT": "20260101", "ZUSTD": "",
+            }
+        ],
+        materials={
+            identity.material_lookup_key(row): row for row in materials.accepted
+        },
+    )
+
+    assert not stock.issues_for("DQ-STK-005")
+    assert len(stock.accepted) == 1
+
+
+def test_a_source_number_containing_a_slash_survives_the_cross_reference():
+    """External number ranges are not numeric.
+
+    `SYSTEM/NUMBER` is this pipeline's own convention, so only the
+    first slash is a separator. Splitting on all of them truncates the
+    historical number written to the load file, which is the one thing
+    the cross reference exists to preserve.
+    """
+    material = _material("GEP", "ABC/123", "EXTERNALLY NUMBERED")
+    harmonisation = mapping.ProductHarmonisation([])
+    products = mapping.convert_to_products([material], harmonisation)
+
+    row = next(iter(products.xref_rows()))
+    assert row["SourceSystem"] == "GEP"
+    assert row["SourceMaterial"] == "ABC/123"
+    assert products.lookup["GEP/ABC/123"] == row["Product"]
 
 
 def test_stock_in_a_different_unit_from_the_master_is_held_back(result):

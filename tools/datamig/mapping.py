@@ -26,6 +26,7 @@ from .identity import (
     material_lookup_key,
     partner_identity,
     source_key,
+    split_source_key,
     strip_leading_zeros,
 )
 
@@ -127,15 +128,16 @@ class ProductResult:
         return {
             f"{system}/{strip_leading_zeros(material)}": product
             for system, material, product in (
-                (*key.split("/"), product) for key, product in self.xref.items()
+                (*split_source_key(key), product)
+                for key, product in self.xref.items()
             )
         }
 
     def xref_rows(self) -> list[dict[str, str]]:
         rows = [
             {
-                "SourceSystem": key.split("/")[0],
-                "SourceMaterial": key.split("/")[1],
+                "SourceSystem": split_source_key(key)[0],
+                "SourceMaterial": split_source_key(key)[1],
                 "Product": product,
             }
             for key, product in self.xref.items()
@@ -264,7 +266,7 @@ class BusinessPartnerResult:
         rows: list[dict[str, str]] = []
         for partner in self.partners:
             for customer in partner.source_customers:
-                system, source_id = customer.split("/")
+                system, source_id = split_source_key(customer)
                 rows.append(
                     {
                         "SourceSystem": system,
@@ -274,7 +276,7 @@ class BusinessPartnerResult:
                     }
                 )
             for vendor in partner.source_vendors:
-                system, source_id = vendor.split("/")
+                system, source_id = split_source_key(vendor)
                 rows.append(
                     {
                         "SourceSystem": system,

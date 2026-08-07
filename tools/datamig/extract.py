@@ -80,11 +80,14 @@ def read_csv(path: str | Path, name: str, source_system: str) -> Dataset:
     ``source_system`` is required: every downstream stage keys on it,
     and a row without it fails somewhere far from where it was read.
     """
+    # Before the file check: an unknown system is a defect in the
+    # caller, and reporting a missing extract instead sends whoever
+    # reads it looking for the wrong thing.
+    if source_system not in SOURCE_SYSTEMS:
+        raise ExtractError(f"unknown source system: {source_system}")
     file_path = Path(path)
     if not file_path.exists():
         raise ExtractError(f"extract not found: {file_path}")
-    if source_system not in SOURCE_SYSTEMS:
-        raise ExtractError(f"unknown source system: {source_system}")
 
     rows: list[dict[str, str]] = []
     with open(file_path, newline="", encoding="utf-8") as handle:

@@ -33,6 +33,19 @@ def source_key(row: dict[str, str], key_field: str) -> str:
     return f"{row['SOURCE_SYSTEM']}/{row[key_field]}"
 
 
+def split_source_key(key: str) -> tuple[str, str]:
+    """The inverse of `source_key`, splitting on the first slash only.
+
+    SAP numbers assigned from an external range may contain a slash -
+    a material `ABC/123` is legal - so splitting on every separator
+    would raise on the unpack, or silently truncate the number written
+    to a cross reference load file. Only the first slash is the one
+    this module put there.
+    """
+    system, _, record = key.partition("/")
+    return (system, record)
+
+
 def material_key(source_system: str, material: str) -> tuple[str, str]:
     """The key a harmonisation decision is matched on.
 

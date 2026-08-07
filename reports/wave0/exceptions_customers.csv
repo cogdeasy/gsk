@@ -10,4 +10,4 @@ DQ-CUS-007,warn,customers,"GEP/0000210049, GVP/0000210116",NAME1,records merge i
 DQ-CUS-007,warn,customers,"GEP/0000210050, GVP/0000210112",NAME1,records merge into one business partner across both source systems: UNICEF SUPPLY DIVISION
 DQ-CUS-007,warn,customers,"GEP/0000210051, GVP/0000210113",NAME1,records merge into one business partner across both source systems: PAHO REVOLVING FUND
 DQ-CUS-007,warn,customers,"GEP/0000210053, GVP/0000210117",NAME1,records merge into one business partner across both source systems: ZUELLIG PHARMA SINGAPORE
-DQ-CUS-008,warn,customers,"GEP/0000210045, GVP/0000210045",KUNNR,number 0000210045 exists in both source systems as different entities (INSTITUT PASTEUR DE DAKAR / NHS SUPPLY CHAIN); it must not be reused as the business partner number
+DQ-CUS-008,warn,customers,"GEP/0000210045, GVP/0000210045",KUNNR,number 210045 exists in both source systems as different entities (INSTITUT PASTEUR DE DAKAR / NHS SUPPLY CHAIN); it must not be reused as the business partner number
