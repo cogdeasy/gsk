@@ -30,7 +30,7 @@ wave 0:
 | --- | --- | --- |
 | Custom code remediation | 7 outstanding objects, 89 findings, 97.7 engineer-days | `reports/remediation-backlog.md` (findings by wave) |
 | Data migration engineering | 5 objects - materials, customers, vendors, open items, batch stock; 96 records extracted, 82 loaded, 14 held back | `reports/wave0/reconciliation.md` |
-| Test and validation evidence | 9 GxP objects with no ABAP Unit test evidence, per rule `SI-GXP-001` | `docs/VALIDATION.md` |
+| Test and validation evidence | 9 GxP-classified objects estate-wide, of which 7 still lack ABAP Unit test evidence under rule `SI-GXP-001` - 6 of those are wave 0 | `docs/VALIDATION.md`, `reports/remediation-backlog.md` (findings by rule) |
 
 Two wave 0 objects are already done and are the reference pattern rather
 than backlog: `ZGSK_MM_STOCK_OVERVIEW` (20 findings cleared) and
@@ -157,8 +157,9 @@ make check    # ruff + pytest + the readiness gate
   cannot drift from the code.
 - Remediated ABAP must scan clean at `--fail-on minor`.
 
-Wave 0 is complete when the tracker above is all `Done`, the nine GxP
-objects have ABAP Unit evidence, and the reconciliation report
+Wave 0 is complete when the tracker above is all `Done`, the six
+outstanding wave 0 GxP objects have ABAP Unit evidence, and the
+reconciliation report
 regenerates with 22 of 22 checks passing.
 
 ## Where to begin
