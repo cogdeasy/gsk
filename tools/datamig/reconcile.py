@@ -26,6 +26,21 @@ if TYPE_CHECKING:
     from .mapping import ProductHarmonisation, ProductResult
 
 
+# A check whose two sides are counted from different things: the ECC
+# extract on one side, the rows written to the target on the other. It
+# can fail on real data, and it is the only kind that is evidence about
+# the load.
+COMPARED = "compared"
+
+# A check whose two sides are derived from the same data, so it holds
+# unless the tooling itself is broken. Worth running - it is how a
+# mis-set counter or a mapping that starts dropping records gets caught
+# - but it says nothing about whether the extract was right, and an
+# evidence pack that does not distinguish the two overstates what it
+# proves. `AGENTS.md`: a check that cannot fail is not a check.
+INVARIANT = "invariant"
+
+
 @dataclass(frozen=True)
 class Check:
     id: str
@@ -34,6 +49,7 @@ class Check:
     target_value: str
     passed: bool
     note: str = ""
+    evidence: str = COMPARED
 
     @property
     def status(self) -> str:
@@ -46,6 +62,7 @@ class Check:
             "source_value": self.source_value,
             "target_value": self.target_value,
             "status": self.status,
+            "evidence": self.evidence,
             "note": self.note,
         }
 
@@ -59,6 +76,13 @@ class ObjectCounts:
     present in the emitted target rows. Comparing the two is what makes
     the count check capable of failing: a mapping that drops, duplicates
     or invents a record breaks it.
+
+    ``loaded_independently`` says whether ``loaded`` was counted off
+    something other than the accepted records - for partners, the
+    cross-reference rows that get written. Where it was not, mapping
+    emits one row per accepted record by construction, so the record
+    arithmetic restates its own source side and is reported as an
+    invariant rather than as evidence.
     """
 
     object_name: str
@@ -69,6 +93,7 @@ class ObjectCounts:
     source_keys: frozenset[str] = frozenset()
     target_keys: frozenset[str] = frozenset()
     merged: int = 0
+    loaded_independently: bool = False
 
     @property
     def missing(self) -> frozenset[str]:
@@ -172,6 +197,12 @@ def _merge_checks(
         mapped_materials = len(accepted_materials)
         checks.append(
             Check(
+                # Still an invariant, for the reason the comment above
+                # gives about the other direction: `convert_to_products`
+                # turns every accepted row into one product or one
+                # merge, and raises rather than skipping. REC-MRG-003
+                # is the one that goes and looks at the load file.
+                evidence=INVARIANT,
                 id="REC-MRG-002",
                 description="material records minus harmonisations equals products",
                 source_value=(
@@ -345,9 +376,16 @@ def build(
         # table. Printing it without checking it makes the table a
         # claim rather than evidence, and a mis-set `merged` would
         # leave it silently describing a different load file.
+        #
+        # Only evidence where `loaded` was counted off the target. For
+        # the rest, mapping emits one row per accepted record or raises,
+        # so `extracted - rejected` is `len(accepted)` is `loaded` - the
+        # check catches a tooling defect, not a data one, and is
+        # labelled as the invariant it is.
         expected = count.extracted - count.rejected - count.merged
         reconciliation.checks.append(
             Check(
+                evidence=COMPARED if count.loaded_independently else INVARIANT,
                 id=f"REC-ARI-{count.object_name}",
                 description=(
                     f"{count.object_name}: extracted - rejected - merged "
@@ -590,12 +628,24 @@ def to_markdown(reconciliation: Reconciliation) -> str:
 
     lines.append("## Checks")
     lines.append("")
-    lines.append("| Check | Description | Source | Target | Result | Note |")
-    lines.append("| --- | --- | --- | --- | --- | --- |")
+    lines.append(
+        "`Evidence` says what a pass is worth. **compared** counts the "
+        "two sides from different things - the ECC extract and the rows "
+        "written to the target - so it can fail on real data. "
+        "**invariant** derives both sides from the same data: it catches "
+        "the tooling breaking, not the data being wrong, and proves "
+        "nothing about the load on its own."
+    )
+    lines.append("")
+    lines.append(
+        "| Check | Description | Source | Target | Evidence | Result | Note |"
+    )
+    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
     for check in reconciliation.checks:
         lines.append(
             f"| {check.id} | {check.description} | {check.source_value} | "
-            f"{check.target_value} | {check.status} | {check.note} |"
+            f"{check.target_value} | {check.evidence} | {check.status} | "
+            f"{check.note} |"
         )
     lines.append("")
 

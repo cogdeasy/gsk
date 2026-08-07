@@ -1079,6 +1079,35 @@ def test_the_printed_record_arithmetic_is_checked(result):
     assert "REC-CNT-materials" not in {check.id for check in broken.failed_checks}
 
 
+def test_the_pack_says_which_checks_could_actually_have_failed(result):
+    """`AGENTS.md`: a check that cannot fail is not a check.
+
+    Three of the record-arithmetic checks derive both sides from the
+    accepted records, so they hold unless the tooling is broken. They
+    are worth running for exactly that reason, but presenting them
+    beside checks that compare the extract with the load file
+    overstates what the pack proves, so each check says which it is.
+    """
+    from datamig import reconcile
+
+    evidence = {
+        check.id: check.evidence for check in result.reconciliation.checks
+    }
+    # Counted off the cross-reference rows that get written.
+    assert evidence["REC-ARI-customers"] == reconcile.COMPARED
+    assert evidence["REC-ARI-vendors"] == reconcile.COMPARED
+    # Mapping emits one row per accepted record or raises.
+    assert evidence["REC-ARI-materials"] == reconcile.INVARIANT
+    assert evidence["REC-ARI-open_items"] == reconcile.INVARIANT
+    assert evidence["REC-MRG-002"] == reconcile.INVARIANT
+    # Goes and looks at the load file for the surviving product.
+    assert evidence["REC-MRG-003"] == reconcile.COMPARED
+    assert all(
+        check.evidence in (reconcile.COMPARED, reconcile.INVARIANT)
+        for check in result.reconciliation.checks
+    )
+
+
 def test_a_customer_lost_between_cleansing_and_load_breaks_the_arithmetic(
     tmp_path,
 ):

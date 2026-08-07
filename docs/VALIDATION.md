@@ -51,6 +51,17 @@ evidence pack for a load:
 - an exception file per object, naming the data quality rule, the key
   and the reason.
 
+Each check states what a pass is worth. A **compared** check counts
+its two sides from different things - the ECC extract and the rows
+written to the target - so it can fail on real data. An **invariant**
+derives both sides from the same data: it holds unless the tooling
+itself is broken, which is worth knowing but is not evidence about the
+load. The record arithmetic for materials, open items and stock is an
+invariant, because mapping emits one row per accepted record or stops;
+for customers and vendors it is compared, because the load file is the
+cross reference and is counted separately. An assessor should read the
+column, not the pass count.
+
 A wave cannot be signed off with a failing check. Warnings are allowed
 but must be explained in the cutover log - for wave 0 the open ones are
 stock sitting in quality inspection at cutover (needs a usage decision

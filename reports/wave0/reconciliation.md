@@ -32,41 +32,43 @@ Both ECC systems load into one S/4HANA client. These are the records each contri
 
 ## Checks
 
-| Check | Description | Source | Target | Result | Note |
-| --- | --- | --- | --- | --- | --- |
-| REC-CNT-materials | materials: every accepted record loaded once | 22 accepted keys | 22 keys in the load file | PASS |  |
-| REC-ARI-materials | materials: extracted - rejected - merged equals the load file | 31 - 6 - 3 = 22 | 22 rows loaded | PASS |  |
-| REC-CNT-customers | customers: every accepted record loaded once | 23 accepted keys | 23 keys in the load file | PASS |  |
-| REC-ARI-customers | customers: extracted - rejected - merged equals the load file | 25 - 2 - 0 = 23 | 23 rows loaded | PASS |  |
-| REC-CNT-vendors | vendors: every accepted record loaded once | 20 accepted keys | 20 keys in the load file | PASS |  |
-| REC-ARI-vendors | vendors: extracted - rejected - merged equals the load file | 21 - 1 - 0 = 20 | 20 rows loaded | PASS |  |
-| REC-CNT-open_items | open_items: every accepted record loaded once | 36 accepted keys | 36 keys in the load file | PASS |  |
-| REC-ARI-open_items | open_items: extracted - rejected - merged equals the load file | 42 - 6 - 0 = 36 | 36 rows loaded | PASS |  |
-| REC-CNT-batch_stock | batch_stock: every accepted record loaded once | 21 accepted keys | 21 keys in the load file | PASS |  |
-| REC-ARI-batch_stock | batch_stock: extracted - rejected - merged equals the load file | 32 - 11 - 0 = 21 | 21 rows loaded | PASS |  |
-| REC-BP-001 | one business partner per distinct legal entity | 33 identities in 43 records | 33 BPs in the load file | PASS | 10 records merged into a shared BP |
-| REC-BP-002 | every loaded open item partner resolves to a BP | 18 | 18 | PASS |  |
-| REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | PASS |  |
-| REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | PASS | 7 BPs are held in both source systems |
-| REC-MRG-002 | material records minus harmonisations equals products | 25 materials - 3 harmonised | 22 products | PASS | 6 rejected before mapping |
-| REC-MRG-003 | every harmonised material resolves to a loaded product | 3 survivors named by decisions | 3 in the load file | PASS |  |
-| REC-MRG-004 | every harmonisation decision was applied or rejected | 4 decisions | 3 applied, 1 rejected | PASS | held back by cleansing: GVP/000000000000700301 |
-| REC-FI-VAL-BE01-EUR | open item value total BE01 EUR | 6448000.00 | 6448000.00 | PASS |  |
-| REC-FI-VAL-BE02-EUR | open item value total BE02 EUR | 18072000.00 | 18072000.00 | PASS |  |
-| REC-FI-VAL-DE01-EUR | open item value total DE01 EUR | 2884000.00 | 2884000.00 | PASS |  |
-| REC-FI-VAL-GB01-GBP | open item value total GB01 GBP | 5801101.50 | 5801101.50 | PASS |  |
-| REC-FI-VAL-IE01-EUR | open item value total IE01 EUR | 1224000.00 | 1224000.00 | PASS |  |
-| REC-FI-VAL-US01-USD | open item value total US01 USD | 13990000.00 | 13990000.00 | PASS |  |
-| REC-FI-BAL-BE01 | loaded open items balance in BE01 | debit 3224000.00 | credit 3224000.00 | PASS |  |
-| REC-FI-BAL-BE02 | loaded open items balance in BE02 | debit 9036000.00 | credit 9036000.00 | PASS |  |
-| REC-FI-BAL-DE01 | loaded open items balance in DE01 | debit 1442000.00 | credit 1442000.00 | PASS |  |
-| REC-FI-BAL-GB01 | loaded open items balance in GB01 | debit 2900550.75 | credit 2900550.75 | PASS |  |
-| REC-FI-BAL-IE01 | loaded open items balance in IE01 | debit 612000.00 | credit 612000.00 | PASS |  |
-| REC-FI-BAL-US01 | loaded open items balance in US01 | debit 6995000.00 | credit 6995000.00 | PASS |  |
-| REC-STK-BE31 | unrestricted stock quantity in plant BE31 | 962000.000 | 962000.000 | PASS |  |
-| REC-STK-BE32 | unrestricted stock quantity in plant BE32 | 1495000.000 | 1495000.000 | PASS |  |
-| REC-STK-BE33 | unrestricted stock quantity in plant BE33 | 19800.000 | 19800.000 | PASS |  |
-| REC-STK-GB21 | unrestricted stock quantity in plant GB21 | 304230.500 | 304230.500 | PASS |  |
-| REC-STK-GB22 | unrestricted stock quantity in plant GB22 | 123000.000 | 123000.000 | PASS |  |
-| REC-STK-IE41 | unrestricted stock quantity in plant IE41 | 33000.000 | 33000.000 | PASS |  |
-| REC-STK-KEY | initial stock is unique on the S/4HANA key | 21 rows | 21 distinct product/plant/sloc/batch | PASS |  |
+`Evidence` says what a pass is worth. **compared** counts the two sides from different things - the ECC extract and the rows written to the target - so it can fail on real data. **invariant** derives both sides from the same data: it catches the tooling breaking, not the data being wrong, and proves nothing about the load on its own.
+
+| Check | Description | Source | Target | Evidence | Result | Note |
+| --- | --- | --- | --- | --- | --- | --- |
+| REC-CNT-materials | materials: every accepted record loaded once | 22 accepted keys | 22 keys in the load file | compared | PASS |  |
+| REC-ARI-materials | materials: extracted - rejected - merged equals the load file | 31 - 6 - 3 = 22 | 22 rows loaded | invariant | PASS |  |
+| REC-CNT-customers | customers: every accepted record loaded once | 23 accepted keys | 23 keys in the load file | compared | PASS |  |
+| REC-ARI-customers | customers: extracted - rejected - merged equals the load file | 25 - 2 - 0 = 23 | 23 rows loaded | compared | PASS |  |
+| REC-CNT-vendors | vendors: every accepted record loaded once | 20 accepted keys | 20 keys in the load file | compared | PASS |  |
+| REC-ARI-vendors | vendors: extracted - rejected - merged equals the load file | 21 - 1 - 0 = 20 | 20 rows loaded | compared | PASS |  |
+| REC-CNT-open_items | open_items: every accepted record loaded once | 36 accepted keys | 36 keys in the load file | compared | PASS |  |
+| REC-ARI-open_items | open_items: extracted - rejected - merged equals the load file | 42 - 6 - 0 = 36 | 36 rows loaded | invariant | PASS |  |
+| REC-CNT-batch_stock | batch_stock: every accepted record loaded once | 21 accepted keys | 21 keys in the load file | compared | PASS |  |
+| REC-ARI-batch_stock | batch_stock: extracted - rejected - merged equals the load file | 32 - 11 - 0 = 21 | 21 rows loaded | invariant | PASS |  |
+| REC-BP-001 | one business partner per distinct legal entity | 33 identities in 43 records | 33 BPs in the load file | compared | PASS | 10 records merged into a shared BP |
+| REC-BP-002 | every loaded open item partner resolves to a BP | 18 | 18 | compared | PASS |  |
+| REC-BP-003 | cross reference covers every migrated partner | 43 | 43 | compared | PASS |  |
+| REC-MRG-001 | partner records minus merges equals business partners | 43 records - 10 merged | 33 BPs | compared | PASS | 7 BPs are held in both source systems |
+| REC-MRG-002 | material records minus harmonisations equals products | 25 materials - 3 harmonised | 22 products | invariant | PASS | 6 rejected before mapping |
+| REC-MRG-003 | every harmonised material resolves to a loaded product | 3 survivors named by decisions | 3 in the load file | compared | PASS |  |
+| REC-MRG-004 | every harmonisation decision was applied or rejected | 4 decisions | 3 applied, 1 rejected | compared | PASS | held back by cleansing: GVP/000000000000700301 |
+| REC-FI-VAL-BE01-EUR | open item value total BE01 EUR | 6448000.00 | 6448000.00 | compared | PASS |  |
+| REC-FI-VAL-BE02-EUR | open item value total BE02 EUR | 18072000.00 | 18072000.00 | compared | PASS |  |
+| REC-FI-VAL-DE01-EUR | open item value total DE01 EUR | 2884000.00 | 2884000.00 | compared | PASS |  |
+| REC-FI-VAL-GB01-GBP | open item value total GB01 GBP | 5801101.50 | 5801101.50 | compared | PASS |  |
+| REC-FI-VAL-IE01-EUR | open item value total IE01 EUR | 1224000.00 | 1224000.00 | compared | PASS |  |
+| REC-FI-VAL-US01-USD | open item value total US01 USD | 13990000.00 | 13990000.00 | compared | PASS |  |
+| REC-FI-BAL-BE01 | loaded open items balance in BE01 | debit 3224000.00 | credit 3224000.00 | compared | PASS |  |
+| REC-FI-BAL-BE02 | loaded open items balance in BE02 | debit 9036000.00 | credit 9036000.00 | compared | PASS |  |
+| REC-FI-BAL-DE01 | loaded open items balance in DE01 | debit 1442000.00 | credit 1442000.00 | compared | PASS |  |
+| REC-FI-BAL-GB01 | loaded open items balance in GB01 | debit 2900550.75 | credit 2900550.75 | compared | PASS |  |
+| REC-FI-BAL-IE01 | loaded open items balance in IE01 | debit 612000.00 | credit 612000.00 | compared | PASS |  |
+| REC-FI-BAL-US01 | loaded open items balance in US01 | debit 6995000.00 | credit 6995000.00 | compared | PASS |  |
+| REC-STK-BE31 | unrestricted stock quantity in plant BE31 | 962000.000 | 962000.000 | compared | PASS |  |
+| REC-STK-BE32 | unrestricted stock quantity in plant BE32 | 1495000.000 | 1495000.000 | compared | PASS |  |
+| REC-STK-BE33 | unrestricted stock quantity in plant BE33 | 19800.000 | 19800.000 | compared | PASS |  |
+| REC-STK-GB21 | unrestricted stock quantity in plant GB21 | 304230.500 | 304230.500 | compared | PASS |  |
+| REC-STK-GB22 | unrestricted stock quantity in plant GB22 | 123000.000 | 123000.000 | compared | PASS |  |
+| REC-STK-IE41 | unrestricted stock quantity in plant IE41 | 33000.000 | 33000.000 | compared | PASS |  |
+| REC-STK-KEY | initial stock is unique on the S/4HANA key | 21 rows | 21 distinct product/plant/sloc/batch | compared | PASS |  |

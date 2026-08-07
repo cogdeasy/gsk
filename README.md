@@ -179,6 +179,13 @@ object, signed off before cutover, checked against the extract rather
 than derived from it. `data/wave0` has no such manifest, so that
 boundary is the honest limit of the evidence here.
 
+There is a nearer boundary too. Some checks derive both of their sides
+from the same data - the record arithmetic for materials, open items
+and stock holds unless mapping itself is broken, because mapping emits
+one row per accepted record or stops. Those are worth running and are
+not evidence about the load, so the pack labels every check `compared`
+or `invariant` rather than leaving a reader to count passes.
+
 ## Layout
 
 ```

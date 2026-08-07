@@ -76,6 +76,7 @@
       "source_value": "22 accepted keys",
       "target_value": "22 keys in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -84,6 +85,7 @@
       "source_value": "31 - 6 - 3 = 22",
       "target_value": "22 rows loaded",
       "status": "PASS",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -92,6 +94,7 @@
       "source_value": "23 accepted keys",
       "target_value": "23 keys in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -100,6 +103,7 @@
       "source_value": "25 - 2 - 0 = 23",
       "target_value": "23 rows loaded",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -108,6 +112,7 @@
       "source_value": "20 accepted keys",
       "target_value": "20 keys in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -116,6 +121,7 @@
       "source_value": "21 - 1 - 0 = 20",
       "target_value": "20 rows loaded",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -124,6 +130,7 @@
       "source_value": "36 accepted keys",
       "target_value": "36 keys in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -132,6 +139,7 @@
       "source_value": "42 - 6 - 0 = 36",
       "target_value": "36 rows loaded",
       "status": "PASS",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -140,6 +148,7 @@
       "source_value": "21 accepted keys",
       "target_value": "21 keys in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -148,6 +157,7 @@
       "source_value": "32 - 11 - 0 = 21",
       "target_value": "21 rows loaded",
       "status": "PASS",
+      "evidence": "invariant",
       "note": ""
     },
     {
@@ -156,6 +166,7 @@
       "source_value": "33 identities in 43 records",
       "target_value": "33 BPs in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": "10 records merged into a shared BP"
     },
     {
@@ -164,6 +175,7 @@
       "source_value": "18",
       "target_value": "18",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -172,6 +184,7 @@
       "source_value": "43",
       "target_value": "43",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -180,6 +193,7 @@
       "source_value": "43 records - 10 merged",
       "target_value": "33 BPs",
       "status": "PASS",
+      "evidence": "compared",
       "note": "7 BPs are held in both source systems"
     },
     {
@@ -188,6 +202,7 @@
       "source_value": "25 materials - 3 harmonised",
       "target_value": "22 products",
       "status": "PASS",
+      "evidence": "invariant",
       "note": "6 rejected before mapping"
     },
     {
@@ -196,6 +211,7 @@
       "source_value": "3 survivors named by decisions",
       "target_value": "3 in the load file",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -204,6 +220,7 @@
       "source_value": "4 decisions",
       "target_value": "3 applied, 1 rejected",
       "status": "PASS",
+      "evidence": "compared",
       "note": "held back by cleansing: GVP/000000000000700301"
     },
     {
@@ -212,6 +229,7 @@
       "source_value": "6448000.00",
       "target_value": "6448000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -220,6 +238,7 @@
       "source_value": "18072000.00",
       "target_value": "18072000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -228,6 +247,7 @@
       "source_value": "2884000.00",
       "target_value": "2884000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -236,6 +256,7 @@
       "source_value": "5801101.50",
       "target_value": "5801101.50",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -244,6 +265,7 @@
       "source_value": "1224000.00",
       "target_value": "1224000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -252,6 +274,7 @@
       "source_value": "13990000.00",
       "target_value": "13990000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -260,6 +283,7 @@
       "source_value": "debit 3224000.00",
       "target_value": "credit 3224000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -268,6 +292,7 @@
       "source_value": "debit 9036000.00",
       "target_value": "credit 9036000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -276,6 +301,7 @@
       "source_value": "debit 1442000.00",
       "target_value": "credit 1442000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -284,6 +310,7 @@
       "source_value": "debit 2900550.75",
       "target_value": "credit 2900550.75",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -292,6 +319,7 @@
       "source_value": "debit 612000.00",
       "target_value": "credit 612000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -300,6 +328,7 @@
       "source_value": "debit 6995000.00",
       "target_value": "credit 6995000.00",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -308,6 +337,7 @@
       "source_value": "962000.000",
       "target_value": "962000.000",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -316,6 +346,7 @@
       "source_value": "1495000.000",
       "target_value": "1495000.000",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -324,6 +355,7 @@
       "source_value": "19800.000",
       "target_value": "19800.000",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -332,6 +364,7 @@
       "source_value": "304230.500",
       "target_value": "304230.500",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -340,6 +373,7 @@
       "source_value": "123000.000",
       "target_value": "123000.000",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -348,6 +382,7 @@
       "source_value": "33000.000",
       "target_value": "33000.000",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     },
     {
@@ -356,6 +391,7 @@
       "source_value": "21 rows",
       "target_value": "21 distinct product/plant/sloc/batch",
       "status": "PASS",
+      "evidence": "compared",
       "note": ""
     }
   ]
