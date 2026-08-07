@@ -1,6 +1,6 @@
 object_name,object_type,path,module,owner,gxp_class,wave,monthly_executions,business_criticality,validation_package,remediated_path
 ZGSK_MM_STOCK_OVERVIEW,PROG,abap/src/mm/zgsk_mm_stock_overview.prog.abap,MM,GSC Supply Chain IT,gxp_relevant,wave0,14200,high,GSC-STK-001,abap/remediated/zgsk_mm_stock_overview.prog.abap
-ZGSK_MM_BATCH_MOVEMENTS,PROG,abap/src/mm/zgsk_mm_batch_movements.prog.abap,MM,GSC Manufacturing IT,gxp_critical,wave0,8600,critical,GMP-BRE-007,
+ZGSK_MM_BATCH_MOVEMENTS,PROG,abap/src/mm/zgsk_mm_batch_movements.prog.abap,MM,GSC Manufacturing IT,gxp_critical,wave0,8600,critical,GMP-BRE-007,abap/remediated/zgsk_mm_batch_movements.prog.abap
 ZGSK_MM_ARIBA_PO_SYNC,PROG,abap/src/mm/zgsk_mm_ariba_po_sync.prog.abap,MM,Global Procurement IT,non_gxp,wave1,31000,high,N/A,
 ZGSK_MM_SERIALISATION_RECON,PROG,abap/src/mm/zgsk_mm_serialisation_recon.prog.abap,MM,GSC Serialisation Programme,gxp_critical,wave0,2400,critical,SER-FMD-003,
 ZGSK_FI_ICT_MARGIN,PROG,abap/src/fi/zgsk_fi_ict_margin.prog.abap,FI,Global Financial Services,non_gxp,wave0,320,critical,N/A,

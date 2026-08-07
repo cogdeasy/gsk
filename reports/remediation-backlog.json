@@ -2,59 +2,66 @@
   "summary": {
     "objects_scanned": 16,
     "objects_with_findings": 16,
-    "objects_remediated": 1,
-    "objects_outstanding": 15,
+    "objects_remediated": 2,
+    "objects_outstanding": 14,
     "effective_loc": 1334,
     "findings": 204,
-    "outstanding_findings": 184,
+    "outstanding_findings": 173,
     "by_severity": {
-      "blocker": 31,
-      "critical": 65,
-      "major": 57,
-      "minor": 31
+      "blocker": 27,
+      "critical": 61,
+      "major": 55,
+      "minor": 30
     },
     "by_rule": {
-      "SI-TECH-003": 44,
-      "SI-TECH-004": 25,
-      "SI-TECH-005": 18,
-      "SI-MM-003": 16,
+      "SI-TECH-003": 42,
+      "SI-TECH-004": 24,
+      "SI-TECH-005": 17,
+      "SI-MM-003": 15,
       "SI-MD-002": 13,
-      "SI-GXP-001": 8,
-      "SI-MM-002": 8,
+      "SI-GXP-001": 7,
       "SI-CO-001": 6,
       "SI-SD-002": 6,
       "SI-FI-001": 5,
       "SI-SD-001": 5,
       "SI-QM-001": 4,
+      "SI-MM-002": 4,
       "SI-MD-001": 4,
       "SI-FI-002": 4,
       "SI-PP-001": 4,
-      "SI-TECH-002": 3,
       "SI-TECH-007": 3,
       "SI-OM-001": 3,
       "SI-TECH-001": 2,
+      "SI-TECH-002": 2,
       "SI-TECH-006": 2,
       "SI-MM-001": 1
     },
     "by_wave": {
-      "wave0": 100,
+      "wave0": 89,
       "wave1": 71,
       "wave2": 13
     }
   },
   "effort": {
-    "raw_points": 865,
-    "weighted_points": 1260.5,
-    "engineer_days": 168.1,
-    "validation_overhead_days": 52.7
+    "raw_points": 804,
+    "weighted_points": 1138.5,
+    "engineer_days": 151.8,
+    "validation_overhead_days": 44.6
   },
   "cleared_effort": {
-    "raw_points": 80,
-    "weighted_points": 120.0,
-    "engineer_days": 16.0,
-    "validation_overhead_days": 5.3
+    "raw_points": 141,
+    "weighted_points": 242.0,
+    "engineer_days": 32.3,
+    "validation_overhead_days": 13.5
   },
   "remediated": [
+    {
+      "object_name": "ZGSK_MM_BATCH_MOVEMENTS",
+      "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
+      "remediated_path": "abap/remediated/zgsk_mm_batch_movements.prog.abap",
+      "wave": "wave0",
+      "cleared_findings": 11
+    },
     {
       "object_name": "ZGSK_MM_STOCK_OVERVIEW",
       "path": "abap/src/mm/zgsk_mm_stock_overview.prog.abap",
@@ -64,168 +71,6 @@
     }
   ],
   "objects": [
-    {
-      "object_name": "ZGSK_MM_BATCH_MOVEMENTS",
-      "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-      "wave": "wave0",
-      "gxp_class": "gxp_critical",
-      "owner": "GSC Manufacturing IT",
-      "validation_package": "GMP-BRE-007",
-      "effective_loc": 84,
-      "raw_effort_points": 61,
-      "weighted_effort_points": 122.0,
-      "by_severity": {
-        "blocker": 4,
-        "critical": 4,
-        "major": 2,
-        "minor": 1
-      },
-      "findings": [
-        {
-          "rule_id": "SI-GXP-001",
-          "title": "GxP object has no automated test evidence",
-          "category": "validation",
-          "severity": "critical",
-          "effort_points": 13,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 1,
-          "evidence": "gxp_critical",
-          "statement": "ZGSK_MM_BATCH_MOVEMENTS (GMP-BRE-007)",
-          "guidance": "GxP-relevant and GxP-critical objects need documented test evidence per wave. Add an ABAP Unit test class and link it to the validation package so regression evidence is generated automatically.",
-          "sap_reference": "Computer system validation (GAMP 5 / Annex 11)"
-        },
-        {
-          "rule_id": "SI-MM-002",
-          "title": "Material document tables MKPF/MSEG accessed directly",
-          "category": "data_model",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 13,
-          "evidence": "MKPF",
-          "statement": "TABLES: mkpf, mseg.",
-          "guidance": "MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.",
-          "sap_reference": "MM-IM: MATDOC single document table"
-        },
-        {
-          "rule_id": "SI-TECH-003",
-          "title": "Obsolete ABAP syntax",
-          "category": "technical_debt",
-          "severity": "major",
-          "effort_points": 2,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 13,
-          "evidence": "TABLES:",
-          "statement": "TABLES: mkpf, mseg.",
-          "guidance": "Header lines, OCCURS, MOVE and TABLES work areas are not permitted in clean-core code and block the move to ABAP for Cloud. Use inline declarations and work areas.",
-          "sap_reference": "ABAP for Cloud language restrictions"
-        },
-        {
-          "rule_id": "SI-MM-003",
-          "title": "Material number hard coded to 18 characters",
-          "category": "data_model",
-          "severity": "critical",
-          "effort_points": 3,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 15,
-          "evidence": "char18",
-          "statement": "TYPES: BEGIN OF ty_move, mblnr TYPE mblnr, mjahr TYPE mjahr, zeile TYPE mblpo, bwart TYPE bwart, matnr TYPE char18, werks TYPE werks_d, lgort TYPE lgort_d, c...",
-          "guidance": "MATNR is 40 characters on S/4HANA. Replace CHAR18 typing, LENGTH 18 declarations and (18) offsets with TYPE matnr.",
-          "sap_reference": "Extended material number field length"
-        },
-        {
-          "rule_id": "SI-TECH-003",
-          "title": "Obsolete ABAP syntax",
-          "category": "technical_debt",
-          "severity": "major",
-          "effort_points": 2,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 30,
-          "evidence": "WITH HEADER LINE",
-          "statement": "DATA: gt_moves TYPE STANDARD TABLE OF ty_move WITH HEADER LINE, gt_head TYPE STANDARD TABLE OF mkpf WITH HEADER LINE.",
-          "guidance": "Header lines, OCCURS, MOVE and TABLES work areas are not permitted in clean-core code and block the move to ABAP for Cloud. Use inline declarations and work areas.",
-          "sap_reference": "ABAP for Cloud language restrictions"
-        },
-        {
-          "rule_id": "SI-MM-002",
-          "title": "Material document tables MKPF/MSEG accessed directly",
-          "category": "data_model",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 33,
-          "evidence": "MKPF",
-          "statement": "SELECT-OPTIONS: s_budat FOR mkpf-budat OBLIGATORY, s_werks FOR mseg-werks OBLIGATORY, s_charg FOR mseg-charg, s_bwart FOR mseg-bwart.",
-          "guidance": "MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.",
-          "sap_reference": "MM-IM: MATDOC single document table"
-        },
-        {
-          "rule_id": "SI-MM-002",
-          "title": "Material document tables MKPF/MSEG accessed directly",
-          "category": "data_model",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 54,
-          "evidence": "MKPF",
-          "statement": "SELECT * FROM mkpf INTO TABLE gt_head WHERE budat IN s_budat.",
-          "guidance": "MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.",
-          "sap_reference": "MM-IM: MATDOC single document table"
-        },
-        {
-          "rule_id": "SI-TECH-005",
-          "title": "SELECT * used",
-          "category": "technical_debt",
-          "severity": "minor",
-          "effort_points": 1,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 54,
-          "evidence": "SELECT *",
-          "statement": "SELECT * FROM mkpf INTO TABLE gt_head WHERE budat IN s_budat.",
-          "guidance": "Column stores penalise wide reads. Select only the fields the program uses.",
-          "sap_reference": "Code pushdown / HANA performance guidance"
-        },
-        {
-          "rule_id": "SI-MM-002",
-          "title": "Material document tables MKPF/MSEG accessed directly",
-          "category": "data_model",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 75,
-          "evidence": "MSEG",
-          "statement": "SELECT mblnr mjahr zeile bwart matnr werks lgort charg menge meins FROM mseg INTO CORRESPONDING FIELDS OF TABLE gt_moves WHERE mblnr = gt_head-mblnr AND mjah...",
-          "guidance": "MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.",
-          "sap_reference": "MM-IM: MATDOC single document table"
-        },
-        {
-          "rule_id": "SI-TECH-004",
-          "title": "Database read inside a loop",
-          "category": "technical_debt",
-          "severity": "critical",
-          "effort_points": 5,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 75,
-          "evidence": "SELECT",
-          "statement": "SELECT mblnr mjahr zeile bwart matnr werks lgort charg menge meins FROM mseg INTO CORRESPONDING FIELDS OF TABLE gt_moves WHERE mblnr = gt_head-mblnr AND mjah...",
-          "guidance": "Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.",
-          "sap_reference": "Code pushdown / HANA performance guidance"
-        },
-        {
-          "rule_id": "SI-TECH-002",
-          "title": "Obsolete function module called",
-          "category": "technical_debt",
-          "severity": "critical",
-          "effort_points": 3,
-          "path": "abap/src/mm/zgsk_mm_batch_movements.prog.abap",
-          "line": 121,
-          "evidence": "CALL FUNCTION 'WS_DOWNLOAD'",
-          "statement": "CALL FUNCTION 'WS_DOWNLOAD' EXPORTING filename = p_file filetype = 'DAT' TABLES data_tab = gt_moves EXCEPTIONS OTHERS = 1.",
-          "guidance": "WS_UPLOAD / WS_DOWNLOAD / UPLOAD / DOWNLOAD are obsolete. Use cl_gui_frontend_services, or for background interfaces an application server path or the file adapter.",
-          "sap_reference": "Obsolete frontend services"
-        }
-      ]
-    },
     {
       "object_name": "ZGSK_QM_BATCH_RELEASE",
       "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
