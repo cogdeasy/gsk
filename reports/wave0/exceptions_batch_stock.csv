@@ -8,6 +8,7 @@ DQ-STK-004,warn,batch_stock,BE31/000000000000100244/V2500221,CINSM,"stock in qua
 DQ-STK-001,reject,batch_stock,BE31/000000000000100251/H2500301,MATNR,stock for a material that is not in the migrated master
 DQ-STK-004,warn,batch_stock,BE31/000000000000100251/H2500301,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
 DQ-STK-004,warn,batch_stock,GB22/000000000000100243/B2500341,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-005,reject,batch_stock,IE41/000000000000100246/B2500401,MEINS,"stock is in 'ST' but the material master says 'TO', so the quantity cannot be loaded without a unit decision"
 DQ-STK-002,reject,batch_stock,GB23/000000000000100247/C2500501,CHARG,batch stock for a material that is not batch managed
 DQ-STK-002,reject,batch_stock,GB21/000000000000100240/P2500601,CHARG,batch stock for a material that is not batch managed
 DQ-STK-001,reject,batch_stock,GB21/000000000000100999/B2500777,MATNR,stock for a material that is not in the migrated master

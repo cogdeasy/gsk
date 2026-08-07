@@ -33,8 +33,8 @@
     {
       "object": "batch_stock",
       "extracted": 20,
-      "rejected": 5,
-      "loaded": 15,
+      "rejected": 6,
+      "loaded": 14,
       "warnings": 7
     }
   ],
@@ -74,8 +74,8 @@
     {
       "id": "REC-CNT-batch_stock",
       "description": "batch_stock: every accepted record loaded once",
-      "source_value": "15 accepted keys",
-      "target_value": "15 keys in the load file",
+      "source_value": "14 accepted keys",
+      "target_value": "14 keys in the load file",
       "status": "PASS",
       "note": ""
     },
@@ -210,8 +210,8 @@
     {
       "id": "REC-STK-IE41",
       "description": "unrestricted stock quantity in plant IE41",
-      "source_value": "157000.000",
-      "target_value": "157000.000",
+      "source_value": "33000.000",
+      "target_value": "33000.000",
       "status": "PASS",
       "note": ""
     }

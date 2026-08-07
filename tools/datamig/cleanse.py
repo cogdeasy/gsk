@@ -305,6 +305,15 @@ def cleanse_batch_stock(
                        "batch stock for a material that is not batch managed")
             )
 
+        if material is not None and material["MEINS"] != row["MEINS"]:
+            reject = True
+            result.issues.append(
+                _issue("DQ-STK-005", Action.REJECT, "batch_stock", key, "MEINS",
+                       f"stock is in '{row['MEINS']}' but the material master "
+                       f"says '{material['MEINS']}', so the quantity cannot be "
+                       "loaded without a unit decision")
+            )
+
         if material is not None and material.get("XCHPF") == "X" and not row["VFDAT"]:
             result.issues.append(
                 _issue("DQ-STK-003", Action.WARN, "batch_stock", key, "VFDAT",

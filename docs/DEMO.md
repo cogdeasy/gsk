@@ -91,6 +91,7 @@ Every reject is named:
 - an FI document out of balance by 10 cents;
 - an open item for a customer that does not exist in the master;
 - batch stock for a material that is not batch managed;
+- batch stock in a unit the material master contradicts;
 - a customer with country code `XX`.
 
 Then the conversion that always bites:

@@ -87,7 +87,8 @@ datamig run --wave wave0 --fail-on-reject     # cutover gate
 The wave 0 extracts carry deliberate defects - a batch-managed material
 with no shelf life, an unbalanced FI document, an open item for a
 partner that does not exist, batch stock for a material that is not
-batch managed, an invalid ISO country. Each one is caught by a named
+batch managed, batch stock whose unit contradicts the material master,
+an invalid ISO country. Each one is caught by a named
 data quality rule, held back from the load, and reported.
 
 The customer/vendor to business partner conversion is the interesting

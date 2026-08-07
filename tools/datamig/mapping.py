@@ -182,7 +182,10 @@ def map_open_item(row: dict[str, str], xref: dict[str, str]) -> dict[str, str]:
 
 def map_stock(row: dict[str, str], materials: dict[str, dict[str, str]]) -> dict[str, str]:
     material = materials.get(row["MATNR"], {})
-    base_unit = UOM_ISO.get(row["MEINS"], row["MEINS"])
+    # The unit of record is the one on the cleansed material master; the
+    # stock extract's own MEINS is not validated against the ISO mapping.
+    source_unit = material.get("MEINS") or row["MEINS"]
+    base_unit = UOM_ISO.get(source_unit, source_unit)
     return {
         "Product": strip_leading_zeros(row["MATNR"]),
         "Plant": row["WERKS"],

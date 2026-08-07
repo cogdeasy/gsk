@@ -193,3 +193,22 @@ def test_pipeline_writes_the_expected_artefacts(tmp_path):
     assert "s4_business_partner_xref.csv" in written
     assert "reconciliation.md" in written
     assert (tmp_path / "rejected_materials.csv").exists()
+
+
+def test_stock_base_unit_comes_from_the_material_master():
+    material = {"MATNR": "000000000000100001", "MEINS": "KG", "ZZ_TEMP_CLASS": "C2"}
+    stock = {
+        "MATNR": "000000000000100001", "WERKS": "GB21", "LGORT": "0001",
+        "CHARG": "B1", "CLABS": "1.000", "CINSM": "0.000", "CSPEM": "0.000",
+        "MEINS": "st", "VFDAT": "", "HSDAT": "", "ZUSTD": "",
+    }
+    row = mapping.map_stock(stock, {material["MATNR"]: material})
+    assert row["BaseUnit"] == "KGM"
+
+
+def test_stock_in_a_different_unit_from_the_master_is_held_back(result):
+    rejected = result.cleansing["batch_stock"].issues_for("DQ-STK-005")
+    assert [issue.key for issue in rejected] == ["IE41/000000000000100246/B2500401"]
+    assert all(
+        row["Product"] != "100246" or row["Plant"] != "IE41" for row in result.stock
+    )
