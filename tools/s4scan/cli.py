@@ -6,12 +6,21 @@ import argparse
 import sys
 from pathlib import Path
 
-from .inventory import Inventory
-from .report import build_backlog, count_by_rule, count_by_severity, to_json, to_markdown
+from .inventory import SOURCE_SYSTEMS, Inventory, InventoryError
+from .report import (
+    build_backlog,
+    by_source_system,
+    convergence_estimates,
+    count_by_rule,
+    count_by_severity,
+    groups_with_built_counterpart,
+    to_json,
+    to_markdown,
+)
 from .rules import RuleFilter, Severity, all_rules
 from .scanner import scan
 
-DEFAULT_SOURCE = "abap/src"
+DEFAULT_SOURCE = "abap/ecc"
 DEFAULT_INVENTORY = "estate/inventory.csv"
 
 
@@ -46,6 +55,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--wave", help="restrict the scan to objects in this wave",
     )
     scan_parser.add_argument(
+        "--system", choices=sorted(SOURCE_SYSTEMS),
+        help=(
+            "report and gate on one ECC source system; convergence groups "
+            "stay whole, so their days are still the programme's"
+        ),
+    )
+    scan_parser.add_argument(
         "--rule", action="append", default=[], help="only run these rule ids",
     )
     scan_parser.add_argument(
@@ -75,7 +91,14 @@ def _run_scan(args: argparse.Namespace) -> int:
     inventory = None
     inventory_path = Path(args.inventory)
     if inventory_path.exists():
-        inventory = Inventory.load(inventory_path)
+        # A mis-edited inventory is an operator's mistake to correct,
+        # and the error already says which group spans which waves.
+        # Reaching them as a traceback buries that in a stack.
+        try:
+            inventory = Inventory.load(inventory_path)
+        except InventoryError as error:
+            print(str(error), file=sys.stderr)
+            return 2
     elif args.inventory != DEFAULT_INVENTORY:
         print(f"inventory not found: {inventory_path}", file=sys.stderr)
         return 2
@@ -92,8 +115,18 @@ def _run_scan(args: argparse.Namespace) -> int:
         test_roots=list(test_roots),
     )
 
-    if args.wave:
-        result.objects = [obj for obj in result.objects if obj.wave == args.wave]
+    # A wave is a plan, and a group is planned as one piece of work, so
+    # a group outside the wave is genuinely not this scan's business -
+    # it narrows the estate itself. A system is not a plan: the same
+    # group spans both, so `--system` narrows only the view.
+    result.filter(
+        estate=(lambda obj: obj.wave == args.wave) if args.wave else None,
+        view=(
+            (lambda obj: obj.source_system == args.system)
+            if args.system
+            else None
+        ),
+    )
 
     if args.format == "json":
         output = to_json(result)
@@ -125,15 +158,83 @@ def _run_scan(args: argparse.Namespace) -> int:
 def _summary(result) -> str:
     backlog = build_backlog(result)
     counts = count_by_severity(backlog)
+    decommissioned = result.decommissioned()
     lines = [
-        f"objects scanned      : {len(result.objects)}",
-        f"objects remediated   : {len(result.remediated())}",
-        f"objects outstanding  : {len(backlog)}",
-        f"effective LOC        : {result.scanned_loc}",
-        f"findings outstanding : {sum(len(obj.findings) for obj in backlog)}",
+        f"objects scanned       : {len(result.objects)}",
+        f"objects remediated    : {len(result.remediated())}",
+        f"objects decommissioned: {len(decommissioned)}",
+        f"objects outstanding   : {len(backlog)}",
+        f"effective LOC         : {result.scanned_loc}",
+        f"findings outstanding  : {sum(len(obj.findings) for obj in backlog)}",
     ]
     for severity, count in counts.items():
         lines.append(f"  {severity:<9}: {count}")
+
+    # Under `--system` the counts above are the view's and the
+    # convergence figures below are the whole group's, because a group
+    # is cross-system by definition and pricing one side of it would be
+    # a wrong number. Both are right; adjacent and unlabelled, one of
+    # them is read as the other.
+    if result.is_partial_view:
+        lines.append(
+            f"  (this view of a {len(result.estate or ())}-object estate; the "
+            "convergence figures below are the whole group's)"
+        )
+
+    by_system = by_source_system(result)
+    if by_system:
+        lines.append("")
+        lines.append("source systems:")
+        for system, objects in by_system.items():
+            outstanding = [obj for obj in backlog if obj.source_system == system]
+            lines.append(
+                f"  {system:<5} {len(objects):>3} objects, "
+                f"{len(outstanding):>3} outstanding"
+            )
+
+    convergence = convergence_estimates(result)
+    if convergence:
+        avoided = round(sum(e.avoided_days for e in convergence), 1)
+        lines.append("")
+        lines.append(
+            f"convergence groups    : {len(convergence)} "
+            f"({avoided} engineer-days avoided by building one object)"
+        )
+        if result.groups_extend_beyond_view():
+            lines.append(
+                "                        whole-group days; the saving is "
+                "the programme's, not this view's"
+            )
+
+    # A group whose counterpart is already built is still a duplication
+    # and still raises SI-CONV-001, but there is no saving left to take.
+    # Unsaid, the findings outnumber the priced groups and the summary
+    # looks like it has lost some.
+    settled = groups_with_built_counterpart(result)
+    if settled:
+        lines.append(
+            f"groups already built  : {len(settled)} "
+            f"({', '.join(group.group_id for group in settled)})"
+        )
+        lines.append(
+            "                        the saving on these is already taken"
+        )
+
+    # SI-CONV-001 fires from the inventory, so a scan of part of the
+    # estate flags a duplication it cannot cost. Saying nothing leaves
+    # findings naming groups that appear in no table.
+    unpriced = result.groups_beyond_scan()
+    if unpriced:
+        lines.append("")
+        lines.append(
+            f"groups not priced     : {len(unpriced)} "
+            f"({', '.join(unpriced)})"
+        )
+        lines.append(
+            "                        the other implementation is outside "
+            "the scanned path"
+        )
+
     lines.append("")
     lines.append("top rules:")
     for rule_id, count in list(count_by_rule(backlog).items())[:10]:

@@ -5,21 +5,40 @@ raise an exception for the data steward (``WARN``), or hold the record
 back from the load (``REJECT``). Nothing is silently dropped: every
 rejected record appears in the exception file and in the reconciliation
 report, which is what the cutover sign-off needs.
+
+Records arrive from both ECC systems in one pass, so the rules that
+look across records - duplicate descriptions, partners that merge -
+see the whole estate rather than one system at a time. That is the
+point: the duplicates worth finding are the ones that only exist
+because the same counterparty or product is mastered twice.
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
 
-from .identity import PartnerIdentity, partner_identity
+from .identity import (
+    PARTNER_ACCOUNTS,
+    PARTNER_TYPES,
+    PartnerIdentity,
+    material_key,
+    material_lookup_key,
+    partner_identity,
+    partner_ref,
+    source_key,
+    split_source_key,
+    strip_leading_zeros,
+)
 
 ISO_COUNTRIES = {
     "GB", "DE", "FR", "BE", "IE", "US", "DK", "TZ", "SG", "CH",
     "MX", "CN", "IT", "ES", "NL", "PL", "JP", "IN", "BR", "CA",
     "AU", "ZA", "KE", "CO", "SE", "NO", "FI", "AT", "PT", "GR",
+    "ID", "PH", "VN", "TH", "NG", "GH", "ET", "SN", "BD", "PK",
 }
 
 # ECC base unit -> ISO unit expected by the S/4HANA load.
@@ -43,13 +62,42 @@ class Action(str, Enum):
 
 
 @dataclass(frozen=True)
+class HarmonisationHold:
+    """Why a material that was to be merged is not in the load.
+
+    Three rules hold a merged material back and they are not the same
+    problem: DQ-MAT-010 means the surviving product was itself
+    rejected, DQ-MAT-011 that the decision points at a number another
+    decision retires, DQ-MAT-012 that the two are held in different
+    base units. Stock behind the material is rejected in turn, and the
+    steward reading that reject needs the rule that actually fired -
+    naming the wrong one sends them looking for an exception that was
+    never raised.
+    """
+
+    target_product: str
+    rule: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Issue:
     rule_id: str
     action: Action
     object_name: str
-    key: str
+    # Every record the issue is raised against, kept as records. A
+    # rule about two records that disagree has two keys, and the
+    # joined string is how the exception pack prints them, not how
+    # anything reads them back: a key component that ever carried a
+    # comma would split into two records that do not exist.
+    keys: tuple[str, ...]
     field: str
     message: str
+
+    @property
+    def key(self) -> str:
+        """The records named, as the exception pack spells them."""
+        return ", ".join(self.keys)
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -68,36 +116,108 @@ class CleanseResult:
     accepted: list[dict[str, str]] = field(default_factory=list)
     rejected: list[dict[str, str]] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
+    #: Source key -> why a harmonised material is not in the load.
+    #: Downstream objects need the reason, not just the absence, to
+    #: report their own rejects usefully.
+    harmonisation_holds: dict[str, HarmonisationHold] = field(default_factory=dict)
+    #: Source keys held back by `DQ-MAT-009` - the number means two
+    #: things and nobody has said which survives. Same reason as
+    #: above: the absence alone would read as a missing master.
+    collision_holds: set[str] = field(default_factory=set)
 
     @property
     def source_count(self) -> int:
         return len(self.accepted) + len(self.rejected)
 
-    def counts_by_action(self) -> dict[str, int]:
-        counter = Counter(issue.action.value for issue in self.issues)
-        return {action.value: counter.get(action.value, 0) for action in Action}
-
     def issues_for(self, rule_id: str) -> list[Issue]:
         return [issue for issue in self.issues if issue.rule_id == rule_id]
 
+    def held_keys(self) -> set[str]:
+        """Every record a reject names."""
+        return {
+            key
+            for issue in self.issues
+            if issue.action is Action.REJECT
+            for key in issue.keys
+        }
 
-def _issue(rule_id, action, object_name, key, field_name, message) -> Issue:
+    def warnings_on_loaded(self) -> list[Issue]:
+        """Warnings against records that actually reach the target.
+
+        A warning on a held record is still true and still shipped in
+        the exception pack - it comes back the day the reject is
+        settled - but it is not something anyone can do anything about
+        in this wave, and counting it as outstanding tells a steward
+        there is work on data that does not exist yet.
+        """
+        held = self.held_keys()
+        return [
+            issue
+            for issue in self.issues
+            if issue.action is Action.WARN
+            and not all(key in held for key in issue.keys)
+        ]
+
+
+def _row_key(row: dict[str, str]) -> tuple[str, str]:
+    """The key a harmonisation decision is matched on. See `identity`."""
+    return material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+
+
+def _issue(
+    rule_id: str,
+    action: Action,
+    object_name: str,
+    key: str | Sequence[str],
+    field_name: str,
+    message: str,
+) -> Issue:
     return Issue(
         rule_id=rule_id,
         action=action,
         object_name=object_name,
-        key=key,
+        keys=(key,) if isinstance(key, str) else tuple(key),
         field=field_name,
         message=message,
     )
 
 
-def cleanse_materials(rows: list[dict[str, str]]) -> CleanseResult:
+def cleanse_materials(
+    rows: list[dict[str, str]],
+    harmonisation_targets: dict[tuple[str, str], str] | None = None,
+    ruled_separate: set[tuple[str, str]] | None = None,
+) -> CleanseResult:
+    """Cleanse the material master from both systems.
+
+    ``harmonisation_targets`` maps (source system, material) to the
+    product number the material is to be merged into. It is needed here
+    rather than only in mapping because a merge inherits the quality of
+    its target: if the surviving record is rejected, the record that
+    was to be retired has nowhere to land.
+    """
+    # Re-keyed on `material_key` rather than trusting the caller to
+    # have done it. Whether a governed merge is applied must not depend
+    # on whether the number arrived padded: get that wrong and the
+    # decision silently does not happen.
+    harmonisation_targets = {
+        material_key(system, material): target
+        for (system, material), target in (harmonisation_targets or {}).items()
+    }
+    # A ruling that two materials stay separate is a decision like any
+    # other, even though mapping has nothing to do with it: the record
+    # still cannot load under a number the other record also claims,
+    # but the exception has to say that a decision exists.
+    ruled_separate = {
+        material_key(system, material)
+        for system, material in (ruled_separate or set())
+    }
+    decided = set(harmonisation_targets) | ruled_separate
     result = CleanseResult(object_name="materials")
-    descriptions: dict[str, list[str]] = defaultdict(list)
+    descriptions: dict[str, list[dict[str, str]]] = defaultdict(list)
+    numbers: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
-        key = row["MATNR"]
+        key = source_key(row, "MATNR")
         reject = False
 
         if row["MEINS"] and row["MEINS"] != row["MEINS"].upper():
@@ -148,22 +268,319 @@ def cleanse_materials(rows: list[dict[str, str]]) -> CleanseResult:
             )
             row["MAKTX"] = row["MAKTX"].upper()
 
-        descriptions[row["MAKTX"]].append(key)
+        # Only a real description. Two records that both arrive with
+        # none are not duplicates of each other, and an exception
+        # reading "duplicate material description ''" is one a steward
+        # can neither act on nor close.
+        if row["MAKTX"]:
+            descriptions[row["MAKTX"]].append(row)
+        # Keyed on the number the material would load under, not the
+        # one it was extracted with: the target product number is the
+        # bare MATNR, so 100801 and 000000000000100801 are the same
+        # product and only differ in how each system padded them.
+        #
+        # Every extracted row, accepted or not. A collision is a fact
+        # about the two extracts, not about how cleansing happened to
+        # treat them: recording only accepted rows would let the
+        # survivor load under the bare number whenever the other side
+        # was rejected for something unrelated, which is exactly what
+        # DQ-MAT-009 exists to stop.
+        numbers[strip_leading_zeros(row["MATNR"])].append(row)
 
         if reject:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
 
-    for description, keys in descriptions.items():
-        if len(keys) > 1:
+    for description, duplicates in descriptions.items():
+        # A pair the data council has already ruled on is not an
+        # exception. Asking a steward to confirm a decision that exists
+        # is how an evidence pack fills up with items nobody can close,
+        # and the decision is the confirmation. Counted the same way as
+        # DQ-MAT-009: one record left undecided means the rest are
+        # being merged into it, and there is nothing outstanding.
+        undecided = [row for row in duplicates if _row_key(row) not in decided]
+        if len(undecided) > 1:
+            systems = {row["SOURCE_SYSTEM"] for row in undecided}
+            scope = (
+                "in both source systems" if len(systems) > 1
+                else f"within {next(iter(systems))}"
+            )
+            keys = [source_key(row, "MATNR") for row in undecided]
             result.issues.append(
-                _issue("DQ-MAT-008", Action.WARN, "materials", ", ".join(keys),
+                _issue("DQ-MAT-008", Action.WARN, "materials", keys,
                        "MAKTX",
-                       f"duplicate material description '{description}'")
+                       f"duplicate material description '{description}' "
+                       f"{scope}, confirm the harmonisation decision")
             )
 
+    # The order is load-bearing, not incidental. Each stage removes its
+    # rejects from `result.accepted` before the next one reads it, which
+    # is what stops a record being rejected twice and counted twice in
+    # the evidence pack, and what decides which rule the steward is sent
+    # after: the collision is a fact about the extracts and outranks
+    # anything a decision says about the record, and a merge that cannot
+    # be performed at all (DQ-MAT-012) is a better answer than one whose
+    # survivor is missing (DQ-MAT-010) because the record it was already
+    # holding back is why it is missing.
+    _reject_undecided_collisions(
+        result, numbers, harmonisation_targets or {}, ruled_separate
+    )
+
+    if harmonisation_targets:
+        _reject_unit_mismatches(result, harmonisation_targets)
+        _reject_orphaned_merges(result, harmonisation_targets)
+
     return result
+
+
+def _reject_unit_mismatches(
+    result: CleanseResult, harmonisation_targets: dict[tuple[str, str], str]
+) -> None:
+    """Hold back a merge between materials held in different units.
+
+    Stock follows the harmonised product but keeps the base unit of the
+    master it came from, so merging a material held in KG into one held
+    in ST would put both quantities on one product with nothing to say
+    which is which. The plant total would still reconcile, because it
+    sums quantities without regard to unit.
+    """
+    units = {
+        strip_leading_zeros(row["MATNR"]): row["MEINS"]
+        for row in result.accepted
+        if _row_key(row) not in harmonisation_targets
+    }
+
+    def mismatch(row: dict[str, str]) -> str | None:
+        target = harmonisation_targets.get(_row_key(row))
+        if target is None or target not in units:
+            return None
+        return None if units[target] == row["MEINS"] else target
+
+    mismatched = [row for row in result.accepted if mismatch(row)]
+    result.accepted[:] = [row for row in result.accepted if not mismatch(row)]
+
+    for row in mismatched:
+        target = harmonisation_targets[_row_key(row)]
+        result.rejected.append(row)
+        result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+            target_product=target,
+            rule="DQ-MAT-012",
+            reason="which is held in a different base unit",
+        )
+        result.issues.append(
+            _issue("DQ-MAT-012", Action.REJECT, "materials",
+                   source_key(row, "MATNR"), "MEINS",
+                   f"held in {row['MEINS']} but harmonised into product "
+                   f"{target}, which is held in {units[target]}; the merge "
+                   "needs a conversion the decision does not state")
+        )
+
+
+def _reject_undecided_collisions(
+    result: CleanseResult,
+    numbers: dict[str, list[dict[str, str]]],
+    harmonisation_targets: dict[tuple[str, str], str],
+    ruled_separate: set[tuple[str, str]] | None = None,
+) -> None:
+    """Hold back a material number that means two things.
+
+    The systems were configured from one template and share number
+    ranges, so the same MATNR can hold unrelated products. The target
+    product number is the bare number, so loading both would keep the
+    first record, discard the second's master data and re-point its
+    batches at the wrong product. Which one survives is a stewardship
+    decision, so both wait for one.
+    """
+    colliding: list[dict[str, str]] = []
+    held: set[str] = set()
+    # Rows are tracked by identity, not by key. A number repeated inside
+    # one extract - the case below - gives two rows the same source key,
+    # so a key-based test would move a row another rule had already
+    # rejected a second time and count it twice in the evidence pack.
+    accepted = {id(row) for row in result.accepted}
+
+    for number, rows in numbers.items():
+        # A decided record is out of scope: it is being merged away and
+        # never claims the number. Unless the extract holds it twice -
+        # ECC cannot, MARA is keyed on MATNR, so an extract that does is
+        # broken. The decision names the key once and cannot say which
+        # of the two records it meant, and mapping would write one
+        # cross-reference entry over the other with nothing said.
+        repeated = Counter(_row_key(row) for row in rows)
+        undecided = [
+            row for row in rows
+            if _row_key(row) not in harmonisation_targets
+            or repeated[_row_key(row)] > 1
+        ]
+        # Two rows landing on one product number, wherever they came
+        # from. Requiring two systems would miss a number repeated
+        # within one extract, which lands on the same product just as
+        # squarely and is dropped just as silently.
+        if len(undecided) < 2:
+            continue
+        systems = {row["SOURCE_SYSTEM"] for row in undecided}
+        scope = (
+            "in both source systems" if len(systems) > 1
+            else f"more than once within {next(iter(systems))}"
+        )
+        keys = [source_key(row, "MATNR") for row in undecided]
+        held.update(material_lookup_key(row) for row in undecided)
+        # A ruling that these are two products does not resolve this:
+        # the target product number is the bare MATNR and only one
+        # record can have it. But saying no decision exists when one
+        # does sends a steward to make it a second time.
+        if any(_row_key(row) in harmonisation_targets for row in undecided):
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products while the decision table names it once; which "
+                "record the merge was for cannot be told from the "
+                "extract, and the other would be written over by it"
+            )
+        elif any(_row_key(row) in (ruled_separate or set()) for row in undecided):
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products, and the decision table rules them separate "
+                "without naming the number the other one takes; neither "
+                "can load under it until one does"
+            )
+        else:
+            message = (
+                f"material number {number} is used {scope} for different "
+                "products and no harmonisation decision nominates a "
+                "survivor; the target product number cannot be carried "
+                "over from either"
+            )
+        # Only what is still in the load can be held back; a row another
+        # rule already rejected is named in the message and left where
+        # it is, so it is not counted as rejected twice.
+        colliding.extend(row for row in undecided if id(row) in accepted)
+        result.issues.append(
+            _issue("DQ-MAT-009", Action.REJECT, "materials", keys, "MATNR", message)
+        )
+
+    # Every side of every collision, including one already rejected by
+    # another rule. Stock hanging off that side is stranded for the
+    # same reason and needs the same explanation.
+    result.collision_holds.update(held)
+
+    if not colliding:
+        return
+
+    rejected = {id(row) for row in colliding}
+    result.accepted[:] = [
+        row for row in result.accepted if id(row) not in rejected
+    ]
+    result.rejected.extend(colliding)
+
+
+def _reject_orphaned_merges(
+    result: CleanseResult, harmonisation_targets: dict[tuple[str, str], str]
+) -> None:
+    """Hold back merges whose surviving product did not itself survive.
+
+    Loading the retired material under its own number instead would
+    quietly reverse a governed decision and split the product's stock
+    and history across two numbers in the target, so the record waits
+    for the surviving master to be corrected.
+    """
+    surviving = {
+        strip_leading_zeros(row["MATNR"])
+        for row in result.accepted
+        if _row_key(row) not in harmonisation_targets
+    }
+
+    def is_orphaned(row: dict[str, str]) -> bool:
+        key = _row_key(row)
+        return (
+            key in harmonisation_targets
+            and harmonisation_targets[key] not in surviving
+        )
+
+    orphaned = [row for row in result.accepted if is_orphaned(row)]
+    # Rebuilt rather than removed one by one: list.remove matches on
+    # dict equality, so it would drop whichever row happens to compare
+    # equal first.
+    result.accepted[:] = [row for row in result.accepted if not is_orphaned(row)]
+
+    # A number retired by some other decision. Only consulted when the
+    # target is missing from the load anyway: if a record in the other
+    # system still carries that number and survives, the product does
+    # exist and the decision is fine.
+    retired = {
+        strip_leading_zeros(material)
+        for _, material in harmonisation_targets
+    }
+    # Numbers the collision rule is already holding. It ran first, so a
+    # survivor it took out is missing for a reason the steward can act
+    # on, and one it cannot reach by correcting the master.
+    #
+    # The system is dropped on purpose, and this is the one place in the
+    # module that drops it: the survivor is named by bare product
+    # number, which is what S/4HANA keys on, so a collision on that
+    # number in *either* extract means the product does not reach the
+    # load. Everywhere a record is identified rather than a target, the
+    # key stays qualified.
+    collided = {hold.split("/", 1)[1] for hold in result.collision_holds}
+
+    for row in orphaned:
+        target = harmonisation_targets[_row_key(row)]
+        result.rejected.append(row)
+        # The collision is tested first, for the reason the module's
+        # stage order gives: a collision is a fact about the extracts
+        # and outranks anything the decision table says about a record.
+        # A survivor number that is both claimed twice and retired by
+        # another decision needs both settled, but only one of them is
+        # what the record is waiting on - rewriting the chain leaves it
+        # pointing at a product that still cannot load.
+        if target in collided:
+            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+                target_product=target,
+                rule="DQ-MAT-009",
+                reason="whose number is claimed by two products",
+            )
+            result.issues.append(
+                _issue("DQ-MAT-010", Action.REJECT, "materials",
+                       source_key(row, "MATNR"), "MATNR",
+                       f"harmonised into product {target}, which is held back "
+                       "because two products claim that number (DQ-MAT-009); "
+                       "nothing on this record or on the surviving master is "
+                       "wrong, and neither loads until that is settled")
+            )
+            continue
+        if target in retired:
+            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+                target_product=target,
+                rule="DQ-MAT-011",
+                reason="which another decision itself retires",
+            )
+            result.issues.append(
+                _issue("DQ-MAT-011", Action.REJECT, "materials",
+                       source_key(row, "MATNR"), "MATNR",
+                       f"harmonised into product {target}, which another "
+                       "decision itself retires; a chain leaves the "
+                       "pipeline to decide what this material really "
+                       "became, so name the surviving product directly")
+            )
+            continue
+        result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+            target_product=target,
+            rule="DQ-MAT-010",
+            reason="which cleansing itself held back",
+        )
+        result.issues.append(
+            _issue("DQ-MAT-010", Action.REJECT, "materials",
+                   source_key(row, "MATNR"), "MATNR",
+                   f"harmonised into product {target}, which is not itself "
+                   "in the load; correct the surviving master or revisit "
+                   "the harmonisation decision")
+        )
+
+
+#: One extracted partner row under the number it was extracted with.
+#: The identity is absent where the row does not carry enough of one -
+#: unknown, which the rules below distinguish from different.
+_NumberedPartner = tuple[str, "PartnerIdentity | None", dict[str, str]]
 
 
 def cleanse_partners(
@@ -172,9 +589,10 @@ def cleanse_partners(
     result = CleanseResult(object_name=object_name)
     prefix = "DQ-CUS" if object_name == "customers" else "DQ-VEN"
     seen: dict[PartnerIdentity, list[str]] = defaultdict(list)
+    numbers: dict[str, list[_NumberedPartner]] = defaultdict(list)
 
     for row in rows:
-        key = row[key_field]
+        key = source_key(row, key_field)
         reject = False
 
         if row["LAND1"] and row["LAND1"] != row["LAND1"].upper():
@@ -216,35 +634,192 @@ def cleanse_partners(
                        "supplier has no GMP audit flag, confirm before cutover")
             )
 
+        # Every extracted row, accepted or not, like the material
+        # collision rule: a number reused across the two systems is a
+        # fact about the extracts, and recording only clean rows would
+        # hide it until the wave that repairs the incomplete one.
+        #
+        # A row with no name or country carries no identity, which is
+        # not the same as carrying a different one - so it is recorded
+        # as unknown rather than as a distinct company, and the rules
+        # below decide separately what to do with it.
+        #
+        # Unpadded: KUNNR and LIFNR are CHAR10 and the two extract
+        # programs need not pad alike, so grouping on the number as
+        # written would miss GEP's 0000210045 against GVP's 210045.
+        numbers[strip_leading_zeros(row[key_field])].append(
+            (key, partner_identity(row) if row["NAME1"] and row["LAND1"] else None, row)
+        )
+
         if reject:
             result.rejected.append(row)
         else:
             result.accepted.append(row)
-            seen[partner_identity(row)].append(key)
+
+    # The two systems share number ranges. Where the same number holds
+    # different entities the merge must key on the entity, not the
+    # number, so the collision is reported before the load rather than
+    # discovered as a wrongly combined partner afterwards.
+    def _named(group: list[_NumberedPartner]) -> str:
+        # Each name carried by its own key rather than as a second list
+        # beside them. Two parallel lists get read positionally, and one
+        # sorted while the other is in extract order tells the steward
+        # the number belongs to the wrong company in the wrong system -
+        # the opposite of what these rules are for.
+        return "; ".join(sorted(
+            f"{key} {identity[0] if identity else 'name or country missing'}"
+            for key, identity, _ in group
+        ))
+
+    for number, entries in numbers.items():
+        by_system: dict[str, list[_NumberedPartner]] = defaultdict(list)
+        for key, identity, row in entries:
+            by_system[key.split("/", 1)[0]].append((key, identity, row))
+
+        # Only rows that say who they are. A row missing its name is
+        # not evidence that the number means two companies, and warning
+        # that it might sends a steward to compare a record against a
+        # blank - the repair to make is the missing field, which its
+        # own reject already names.
+        identified = {identity for _, identity, _ in entries if identity}
+        systems_identified = {
+            key.split("/", 1)[0] for key, identity, _ in entries if identity
+        }
+        if len(systems_identified) > 1 and len(identified) > 1:
+            result.issues.append(
+                _issue(f"{prefix}-008", Action.WARN, object_name,
+                       [key for key, _, _ in entries], key_field,
+                       f"number {number} exists in both source systems as "
+                       f"different entities ({_named(entries)}); it must "
+                       "not be reused as the business partner number")
+            )
+
+        # The same number twice inside one extract, for two entities.
+        # ECC cannot produce it - KNA1 and LFA1 are keyed on the number
+        # - so the extract is the broken thing, and it is not the
+        # tolerable case above: one source key, one cross reference
+        # entry, so the second record's open items would post against
+        # the first record's business partner. Held rather than warned,
+        # because nothing downstream can tell the two apart.
+        for system, group in by_system.items():
+            # On the count, not on the identities. Two rows carrying the
+            # same number and the same company are just as impossible -
+            # and worse to leave in, because they look like one record:
+            # mapping writes the cross reference twice under one source
+            # key, and the wave fails a count with no exception naming
+            # the record that broke it. Same test the material rule
+            # makes, which does not ask whether the two descriptions
+            # agree either.
+            if len(group) < 2:
+                continue
+            named = [entry for entry in group if entry[1]]
+            entities = {identity for _, identity, _ in named}
+            if len(entities) > 1:
+                fault = f"for different entities ({_named(group)})"
+            elif len(named) < len(group):
+                # Whose the second row is cannot be told, which changes
+                # nothing: one source key still cannot carry two
+                # records. Said plainly rather than guessed at, because
+                # the guess a steward would make is that they are the
+                # same company and one row can go.
+                fault = (
+                    "and one of them is too incomplete to say whose it is "
+                    f"({_named(group)})"
+                )
+            else:
+                fault = f"for the same company ({next(iter(entities))[0]}), twice"
+            result.issues.append(
+                _issue(f"{prefix}-009", Action.REJECT, object_name,
+                       [key for key, _, _ in group], key_field,
+                       f"number {number} is held more than once in {system} "
+                       f"{fault}; the extract cannot be loaded until it is "
+                       "corrected")
+            )
+            # By identity, not by key: the two rows share a key, so
+            # moving by key would move a row another rule has already
+            # rejected and count it twice in the evidence pack.
+            held = {id(row) for _, _, row in group}
+            result.rejected.extend(
+                row for row in result.accepted if id(row) in held
+            )
+            result.accepted[:] = [
+                row for row in result.accepted if id(row) not in held
+            ]
+
+    # Last, over what survived. A merge is a statement about the records
+    # that reach the target, so a warning naming one the collision rule
+    # has just held describes a merge that will not happen - and with
+    # one side gone there may be nothing left to merge at all.
+    for row in result.accepted:
+        seen[partner_identity(row)].append(source_key(row, key_field))
 
     for identity, keys in seen.items():
         if len(keys) > 1:
+            systems = {key.split("/", 1)[0] for key in keys}
+            scope = (
+                "across both source systems" if len(systems) > 1
+                else f"within {next(iter(systems))}"
+            )
             result.issues.append(
-                _issue(f"{prefix}-007", Action.WARN, object_name, ", ".join(keys),
+                _issue(f"{prefix}-007", Action.WARN, object_name, keys,
                        "NAME1",
-                       f"records merge into one business partner: {identity[0]}")
+                       f"records merge into one business partner {scope}: "
+                       f"{identity[0]}")
             )
 
     return result
 
 
+def held_partner_refs(
+    result: CleanseResult, partner_type: str
+) -> dict[str, tuple[str, ...]]:
+    """Partner references cleansing held back, and the rules holding them.
+
+    Every reject, not only the duplicate-number holds: what matters to
+    whoever works the exception is whether the record is in the
+    extract, and for all of these it is. `DQ-FI-002`'s instruction - go
+    and find the master - is then the one thing that cannot be done,
+    the same misdiagnosis `DQ-STK-006` exists to prevent on the stock
+    side. Naming the rule that holds the partner puts the work where it
+    can be done: on the country code, or on the collision, whichever it
+    was.
+
+    All of them where a record is held by more than one rule, in the
+    order they fired. Clearing one leaves the record held by the other,
+    so naming a single rule sends the steward back a second time for a
+    problem that was visible the first.
+    """
+    rules: dict[str, tuple[str, ...]] = {}
+    for issue in result.issues:
+        if issue.action is not Action.REJECT:
+            continue
+        for key in issue.keys:
+            system, number = split_source_key(key)
+            reference = partner_ref(system, partner_type, number)
+            held = rules.get(reference, ())
+            if issue.rule_id not in held:
+                rules[reference] = held + (issue.rule_id,)
+    return rules
+
+
 def cleanse_open_items(
-    rows: list[dict[str, str]], known_partners: set[str]
+    rows: list[dict[str, str]],
+    known_partners: set[str],
+    held_partners: dict[str, tuple[str, ...]] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="open_items")
-    documents: dict[tuple[str, str, str], list[dict[str, str]]] = defaultdict(list)
+    held = held_partners or {}
+    documents: dict[tuple[str, str, str, str], list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
-        documents[(row["BUKRS"], row["BELNR"], row["GJAHR"])].append(row)
+        documents[
+            (row["SOURCE_SYSTEM"], row["BUKRS"], row["BELNR"], row["GJAHR"])
+        ].append(row)
 
-    for (bukrs, belnr, gjahr), lines in documents.items():
-        key = f"{bukrs}/{belnr}/{gjahr}"
+    for (system, bukrs, belnr, gjahr), lines in documents.items():
+        key = f"{system}/{bukrs}/{belnr}/{gjahr}"
         reject_document = False
+        undated = False
 
         debit = sum(
             (Decimal(line["DMBTR"]) for line in lines if line["SHKZG"] == "S"),
@@ -264,13 +839,46 @@ def cleanse_open_items(
 
         for line in lines:
             partner = line["PARTNER"]
-            if partner and partner not in known_partners:
+            partner_type = line["PARTNER_TYPE"]
+            # Resolved within the line's own system and against its own
+            # account type: the same number in the other system is a
+            # different company, and in this one it may be a different
+            # company under the other type. An account type that is
+            # neither C nor V matches nothing and is held here too - a
+            # line that cannot say which of the two it means cannot be
+            # resolved to a business partner at all.
+            reference = (
+                partner_ref(line["SOURCE_SYSTEM"], partner_type, partner)
+                if partner
+                else ""
+            )
+            if partner and reference not in known_partners:
                 reject_document = True
-                result.issues.append(
-                    _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
-                           f"partner {partner} is not in the migrated master data")
+                account = (
+                    f"{PARTNER_ACCOUNTS[partner_type]} " if partner_type in PARTNER_TYPES
+                    else f"account type '{partner_type}' "
                 )
-            if partner and not line["ZFBDT"]:
+                rules = held.get(reference)
+                if rules:
+                    result.issues.append(
+                        _issue("DQ-FI-004", Action.REJECT, "open_items", key, "PARTNER",
+                               f"{account}{partner} is held back from the load "
+                               f"by {', '.join(rules)}; this document posts "
+                               f"once {'that is' if len(rules) == 1 else 'those are'} "
+                               "resolved")
+                    )
+                else:
+                    result.issues.append(
+                        _issue("DQ-FI-002", Action.REJECT, "open_items", key, "PARTNER",
+                               f"{account}{partner} is not in the migrated master "
+                               f"data for {system}")
+                    )
+            # Raised once for the document, which is what the exception
+            # is keyed on: a second partner line with the same gap is
+            # the same exception, and counting it twice inflates the
+            # warning column against a steward with one thing to fix.
+            if partner and not line["ZFBDT"] and not undated:
+                undated = True
                 result.issues.append(
                     _issue("DQ-FI-003", Action.WARN, "open_items", key, "ZFBDT",
                            "open item has no baseline date, ageing will be wrong")
@@ -283,16 +891,51 @@ def cleanse_open_items(
 
 
 def cleanse_batch_stock(
-    rows: list[dict[str, str]], materials: dict[str, dict[str, str]]
+    rows: list[dict[str, str]],
+    materials: dict[str, dict[str, str]],
+    harmonisation_holds: dict[str, HarmonisationHold] | None = None,
+    collision_holds: set[str] | None = None,
 ) -> CleanseResult:
     result = CleanseResult(object_name="batch_stock")
+    holds = harmonisation_holds or {}
+    collisions = collision_holds or set()
 
     for row in rows:
-        key = f"{row['WERKS']}/{row['MATNR']}/{row['CHARG']}"
+        key = f"{source_key(row, 'WERKS')}/{row['MATNR']}/{row['CHARG']}"
         reject = False
-        material = materials.get(row["MATNR"])
+        # Padding-insensitive, like every other material join: the
+        # stock extract and the material master are written by
+        # different programs, and a batch padded differently from its
+        # own master would be held under DQ-STK-001 as stock on a
+        # material that was never migrated - the misdiagnosis
+        # DQ-STK-006 and DQ-STK-007 exist to prevent.
+        stock_material = material_lookup_key(row)
+        material = materials.get(stock_material)
 
-        if material is None:
+        if material is None and stock_material in holds:
+            # Naming the missing master would send a steward looking
+            # for a record that was deliberately retired. The work is
+            # on the surviving product, or on the decision itself.
+            reject = True
+            hold = holds[stock_material]
+            result.issues.append(
+                _issue("DQ-STK-006", Action.REJECT, "batch_stock", key, "MATNR",
+                       f"material was harmonised into product "
+                       f"{hold.target_product}, {hold.reason} ({hold.rule}); "
+                       "this stock loads once that is resolved")
+            )
+        elif material is None and stock_material in collisions:
+            # Same reasoning as DQ-STK-006: the master is absent by
+            # decision, not by accident, and the steward has nothing to
+            # do here until the collision is settled.
+            reject = True
+            result.issues.append(
+                _issue("DQ-STK-007", Action.REJECT, "batch_stock", key, "MATNR",
+                       f"material number {strip_leading_zeros(row['MATNR'])} is "
+                       "held in both source systems and no decision names a "
+                       "survivor (DQ-MAT-009); this stock loads once one does")
+            )
+        elif material is None:
             reject = True
             result.issues.append(
                 _issue("DQ-STK-001", Action.REJECT, "batch_stock", key, "MATNR",
@@ -305,7 +948,11 @@ def cleanse_batch_stock(
                        "batch stock for a material that is not batch managed")
             )
 
-        if material is not None and material["MEINS"] != row["MEINS"]:
+        # Case folded on the stock side because the master side has
+        # already been folded by DQ-MAT-001. Comparing the two as
+        # written makes 'kg' against 'KG' a unit decision for a steward,
+        # and there is no decision to take.
+        if material is not None and material["MEINS"] != row["MEINS"].upper():
             reject = True
             result.issues.append(
                 _issue("DQ-STK-005", Action.REJECT, "batch_stock", key, "MEINS",

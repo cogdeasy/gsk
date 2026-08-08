@@ -18,7 +18,7 @@ assumed.
 
 The multiplier is applied to raw remediation effort in the backlog
 report, so the plan shows the validation overhead as a separate number
-rather than burying it. For the current estate that is 58 of 184
+rather than burying it. For the current estate that is 93 of 274
 engineer-days.
 
 ## Evidence per remediated object
@@ -31,8 +31,8 @@ An object is not done until all four exist:
 2. **Automated test evidence** - an ABAP Unit test class named
    `<object>.testclasses.abap`, running against a test double rather
    than client data so the run is reproducible in any client. Rule
-   `SI-GXP-001` fails any GxP object without one; there are currently
-   9 such objects.
+   `SI-GXP-001` fails any GxP object without one; 13 outstanding
+   objects across the two systems are short of one.
 3. **Review record** - the pull request. One remediated object per PR,
    reviewed by the object owner named in the inventory.
 4. **Regression run** - the object's tests green in CI on the wave
@@ -50,6 +50,30 @@ evidence pack for a load:
 - business partner conversion arithmetic, including merges;
 - an exception file per object, naming the data quality rule, the key
   and the reason.
+
+Each check states what a pass is worth. A **compared** check counts
+its two sides from different things - the ECC extract and the rows
+written to the target - so it can fail on real data. An **asserted**
+check reads both sides off the load file and holds it against a rule
+the target must satisfy - a key that is unique, a document that
+balances, a partner reference that resolves. Bad input is how it
+fails, so it is not an invariant, but it never looks at the extract
+and is no evidence that the extract arrived whole. An **invariant**
+derives both sides from the same data: it holds unless the tooling
+itself is broken, which is worth knowing but is not evidence about the
+load. All of the record arithmetic is an invariant, because every
+mapping emits one row per accepted record or stops - partners
+included, where each accepted record is appended to its business
+partner unconditionally. So are the value and quantity totals: mapping
+copies the amount, the company code and the plant across untouched, so
+the two sides are the same addition performed twice. The count checks
+compare key sets and are the ones that fail on real data. An assessor
+should read the column, not the pass count.
+
+What no check in this pack does is prove that the extract was
+complete. That needs a control total produced by the source system and
+signed off before extraction, which is the programme's to obtain -
+here there is nothing upstream of the CSV to compare against.
 
 A wave cannot be signed off with a failing check. Warnings are allowed
 but must be explained in the cutover log - for wave 0 the open ones are

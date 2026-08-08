@@ -1,14 +1,22 @@
 rule_id,action,object,key,field,message
-DQ-STK-004,warn,batch_stock,GB21/000000000000100234/B2500118,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-004,warn,batch_stock,GB21/000000000000100238/A2500044,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-004,warn,batch_stock,GB21/000000000000100241/H2500077,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-004,warn,batch_stock,BE31/000000000000100236/V2500209,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-001,reject,batch_stock,BE31/000000000000100237/V2500215,MATNR,stock for a material that is not in the migrated master
-DQ-STK-004,warn,batch_stock,BE31/000000000000100244/V2500221,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-001,reject,batch_stock,BE31/000000000000100251/H2500301,MATNR,stock for a material that is not in the migrated master
-DQ-STK-004,warn,batch_stock,BE31/000000000000100251/H2500301,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-004,warn,batch_stock,GB22/000000000000100243/B2500341,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
-DQ-STK-005,reject,batch_stock,IE41/000000000000100246/B2500401,MEINS,"stock is in 'ST' but the material master says 'TO', so the quantity cannot be loaded without a unit decision"
-DQ-STK-002,reject,batch_stock,GB23/000000000000100247/C2500501,CHARG,batch stock for a material that is not batch managed
-DQ-STK-002,reject,batch_stock,GB21/000000000000100240/P2500601,CHARG,batch stock for a material that is not batch managed
-DQ-STK-001,reject,batch_stock,GB21/000000000000100999/B2500777,MATNR,stock for a material that is not in the migrated master
+DQ-STK-004,warn,batch_stock,GEP/GB21/000000000000100234/B2500118,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GEP/GB21/000000000000100238/A2500044,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GEP/GB21/000000000000100241/H2500077,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GEP/BE31/000000000000100236/V2500209,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-001,reject,batch_stock,GEP/BE31/000000000000100237/V2500215,MATNR,stock for a material that is not in the migrated master
+DQ-STK-004,warn,batch_stock,GEP/BE31/000000000000100244/V2500221,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-001,reject,batch_stock,GEP/BE31/000000000000100251/H2500301,MATNR,stock for a material that is not in the migrated master
+DQ-STK-004,warn,batch_stock,GEP/BE31/000000000000100251/H2500301,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GEP/GB22/000000000000100243/B2500341,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-007,reject,batch_stock,GEP/GB22/000000000000100249/A2500360,MATNR,material number 100249 is held in both source systems and no decision names a survivor (DQ-MAT-009); this stock loads once one does
+DQ-STK-005,reject,batch_stock,GEP/IE41/000000000000100246/B2500401,MEINS,"stock is in 'ST' but the material master says 'TO', so the quantity cannot be loaded without a unit decision"
+DQ-STK-002,reject,batch_stock,GEP/GB23/000000000000100247/C2500501,CHARG,batch stock for a material that is not batch managed
+DQ-STK-002,reject,batch_stock,GEP/GB21/000000000000100240/P2500601,CHARG,batch stock for a material that is not batch managed
+DQ-STK-001,reject,batch_stock,GEP/GB21/000000000000100999/B2500777,MATNR,stock for a material that is not in the migrated master
+DQ-STK-006,reject,batch_stock,GVP/BE32/000000000000700301/AB2600041,MATNR,"material was harmonised into product 100251, which cleansing itself held back (DQ-MAT-010); this stock loads once that is resolved"
+DQ-STK-006,reject,batch_stock,GVP/BE32/000000000000700301/AB2600042,MATNR,"material was harmonised into product 100251, which cleansing itself held back (DQ-MAT-010); this stock loads once that is resolved"
+DQ-STK-004,warn,batch_stock,GVP/BE32/000000000000700301/AB2600042,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GVP/BE32/000000000000700302/SH2600119,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-004,warn,batch_stock,GVP/BE33/000000000000700307/AS2600014,CINSM,"stock in quality inspection at cutover, needs a usage decision before go-live"
+DQ-STK-002,reject,batch_stock,GVP/BE32/000000000000700309/PK2600021,CHARG,batch stock for a material that is not batch managed
+DQ-STK-007,reject,batch_stock,GVP/BE33/000000000000100249/AH2600017,MATNR,material number 100249 is held in both source systems and no decision names a survivor (DQ-MAT-009); this stock loads once one does

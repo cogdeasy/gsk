@@ -23,11 +23,11 @@ test:
 	$(PYTHON) -m pytest
 
 scan:
-	$(PYTHON) -m s4scan scan abap/src
+	$(PYTHON) -m s4scan scan abap/ecc
 
 scan-report:
-	$(PYTHON) -m s4scan scan abap/src --format markdown --out reports/remediation-backlog.md
-	$(PYTHON) -m s4scan scan abap/src --format json --out reports/remediation-backlog.json
+	$(PYTHON) -m s4scan scan abap/ecc --format markdown --out reports/remediation-backlog.md
+	$(PYTHON) -m s4scan scan abap/ecc --format json --out reports/remediation-backlog.json
 
 migrate:
 	$(PYTHON) -m datamig run --wave wave0

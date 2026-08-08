@@ -9,6 +9,7 @@ from pathlib import Path
 from . import pipeline, reconcile
 from .cleanse import Action
 from .extract import ExtractError
+from .mapping import MappingError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,22 +45,37 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _summary(result: pipeline.PipelineResult) -> str:
+    reconciliation = result.reconciliation
     lines = [f"wave: {result.wave}", ""]
-    lines.append(f"{'object':<14}{'extracted':>10}{'rejected':>10}{'loaded':>8}{'warn':>7}")
-    for count in result.reconciliation.counts:
+    if reconciliation.source_systems:
+        lines.append(f"source systems: {', '.join(reconciliation.source_systems)}")
+        lines.append("")
+    lines.append(
+        f"{'object':<14}{'extracted':>10}{'rejected':>10}{'merged':>8}"
+        f"{'loaded':>8}{'warn':>7}"
+    )
+    for count in reconciliation.counts:
         lines.append(
             f"{count.object_name:<14}{count.extracted:>10}{count.rejected:>10}"
-            f"{count.loaded:>8}{count.warnings:>7}"
+            f"{count.merged:>8}{count.loaded:>8}{count.warnings:>7}"
         )
     lines.append("")
+    partners = result.business_partners
     lines.append(
-        f"business partners created: {len(result.business_partners.partners)} "
-        f"(merged {result.business_partners.merged_count} source records)"
+        f"business partners created: {len(partners.partners)} "
+        f"(merged {partners.merged_count} source records, "
+        f"{len(partners.cross_system_partners)} held in both systems)"
     )
-    failed = result.reconciliation.failed_checks
+    if result.product_result:
+        lines.append(
+            f"products created: {len(result.product_result.products)} "
+            f"(harmonised {result.product_result.merged_count} duplicate "
+            "materials away)"
+        )
+    failed = reconciliation.failed_checks
     lines.append(
-        f"reconciliation: {'PASS' if result.reconciliation.passed else 'FAIL'} "
-        f"({len(failed)} failed of {len(result.reconciliation.checks)} checks)"
+        f"reconciliation: {'PASS' if reconciliation.passed else 'FAIL'} "
+        f"({len(failed)} failed of {len(reconciliation.checks)} checks)"
     )
     for check in failed:
         lines.append(
@@ -93,7 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             out_dir=out_dir,
             write_files=not args.dry_run,
         )
-    except ExtractError as error:
+    # MappingError means cleansing let through something mapping had to
+    # refuse - unreachable while the two agree, and a traceback is the
+    # wrong way to tell an operator their wave stopped when it happens.
+    except (ExtractError, MappingError) as error:
         print(str(error), file=sys.stderr)
         return 2
 

@@ -1,19 +1,257 @@
+import copy
 import json
+from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from s4scan import report
-from s4scan.inventory import Inventory
+from s4scan.inventory import Inventory, InventoryError, is_a_duplication, wave_rank
 from s4scan.rules import RuleFilter, Severity
-from s4scan.scanner import has_test_class, object_name_for, scan, scan_file
+from s4scan.scanner import (
+    ConvergenceGroup,
+    ScanResult,
+    has_test_class,
+    object_name_for,
+    scan,
+    scan_file,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LEGACY = REPO_ROOT / "abap" / "src"
+LEGACY = REPO_ROOT / "abap" / "ecc"
 REMEDIATED = REPO_ROOT / "abap" / "remediated"
 INVENTORY = REPO_ROOT / "estate" / "inventory.csv"
 
 
 def load_inventory() -> Inventory:
     return Inventory.load(INVENTORY)
+
+
+_LEGACY_SCAN: ScanResult | None = None
+
+
+def legacy_scan() -> ScanResult:
+    """A copy of the ECC estate scan, parsed once for the whole run.
+
+    Every caller here wants the same scan of the same files, and
+    copying the result is an order of magnitude cheaper than parsing
+    both systems again - `AGENTS.md` holds the suite to a second. A
+    copy rather than the result itself because `ScanResult.filter`
+    mutates, so a shared one would carry a previous test's view.
+    """
+    global _LEGACY_SCAN
+    if _LEGACY_SCAN is None:
+        _LEGACY_SCAN = scan(
+            [LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"]
+        )
+    return copy.deepcopy(_LEGACY_SCAN)
+
+
+def test_a_convergence_group_split_across_waves_is_refused(tmp_path):
+    """`--wave` narrows the estate, so a split group would vanish.
+
+    Both wave views would drop the group from the convergence backlog
+    while SI-CONV-001 still fired on the member each could see - the
+    report calling an object duplicated and denying the duplication in
+    the same breath.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    members = [index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row]
+    assert len(members) > 1
+    rows[members[0]] = rows[members[0]].replace(",wave0,", ",wave1,")
+    split = tmp_path / "inventory.csv"
+    split.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(InventoryError, match="CG-MM-STOCK spans"):
+        Inventory.load(split)
+
+
+def test_an_inventory_missing_a_column_says_which(tmp_path):
+    """A column dropped by an edit is an edit to explain, not a crash.
+
+    The CLI turns `InventoryError` into a message and an exit code; a
+    `KeyError` on the first row goes past it as a traceback naming a
+    dictionary key, which is not what the person who edited the file
+    is looking at.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    dropped = rows[0].split(",").index("source_system")
+    stripped = tmp_path / "inventory.csv"
+    stripped.write_text(
+        "\n".join(
+            ",".join(cell for index, cell in enumerate(row.split(","))
+                     if index != dropped)
+            for row in rows
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(InventoryError, match="no source_system column"):
+        Inventory.load(stripped)
+
+
+def test_a_group_switched_off_on_one_side_only_is_refused(tmp_path):
+    """One member decommissioned and one kept leaves no group at all.
+
+    A group needs two surviving sides to be a duplication, so with one
+    retired it appears in no convergence table - while the survivor's
+    backlog row still reads `converge (CG-...)` and names a group the
+    report never mentions again.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    member = next(index for index, row in enumerate(rows) if ",CG-MM-STOCK," in row)
+    rows[member] = rows[member].replace(",converge,", ",decommission,")
+    mixed = tmp_path / "inventory.csv"
+    mixed.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(InventoryError, match="CG-MM-STOCK is both"):
+        Inventory.load(mixed)
+
+
+def test_convergence_groups_are_ordered_by_delivery_not_by_spelling(tmp_path):
+    """`wave10` sorts before `wave2` as text and after it as a wave.
+
+    The convergence table is a running order, so a group sorted by the
+    spelling of its wave puts later work above earlier work and the
+    table stops meaning what it is read as meaning.
+    """
+    rows = INVENTORY.read_text(encoding="utf-8").splitlines()
+    for group_id, wave in (("CG-MM-STOCK", "wave10"), ("CG-QM-RELEASE", "wave2")):
+        for index, row in enumerate(rows):
+            if f",{group_id}," in row:
+                rows[index] = ",".join(
+                    wave if part.startswith("wave") else part
+                    for part in row.split(",")
+                )
+    moved = tmp_path / "inventory.csv"
+    moved.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    result = scan(
+        [LEGACY], inventory=Inventory.load(moved), test_roots=[REPO_ROOT / "abap"]
+    )
+    order = [group.group_id for group in result.convergence_groups()]
+    assert order.index("CG-QM-RELEASE") < order.index("CG-MM-STOCK")
+    assert order == sorted(order, key=lambda gid: wave_rank(
+        next(g.wave for g in result.convergence_groups() if g.group_id == gid)
+    ))
+
+
+def test_a_wave_the_programme_adds_is_ordered_the_day_it_appears():
+    """The rank is read off the number, not looked up in a list.
+
+    Enumerating the waves ranked every unlisted one equal, so the test
+    above passed on `wave10` being unknown rather than on it being
+    tenth - and a real `wave3` would have sorted with `unassigned` and
+    been tie-broken by object name.
+    """
+    assert wave_rank("wave2") < wave_rank("wave3") < wave_rank("wave10")
+    assert wave_rank("wave10") < wave_rank("unassigned")
+    # Two unscheduled labels are equally unscheduled, and the reports
+    # are committed: a tie settled by set iteration order is a diff
+    # that comes and goes between runs.
+    assert wave_rank("cutover") < wave_rank("unassigned")
+    assert sorted({"unassigned", "cutover", "wave10", "wave2"}, key=wave_rank) == [
+        "wave2", "wave10", "cutover", "unassigned",
+    ]
+
+
+def test_a_group_with_nothing_left_to_build_has_no_estimate():
+    """`max()` over no members says nothing about which group broke."""
+    result = legacy_scan()
+    group = next(
+        group for group in result.convergence_groups()
+        if not group.outstanding
+    )
+    with pytest.raises(ValueError, match=group.group_id):
+        report.ConvergenceEstimate.from_group(group)
+
+
+def test_a_counterpart_being_switched_off_is_not_a_duplication():
+    """Nothing to converge with, so SI-CONV-001 must not fire.
+
+    The group would price no work - `outstanding` drops decommissioned
+    members - and would not appear as already built either, leaving the
+    finding on the survivor contradicted by both tables.
+
+    Asserted on the predicate rather than through a loaded inventory,
+    because that shape of inventory is now refused on read: keeping the
+    predicate honest still matters, since a scan of part of the estate
+    reaches the same one-surviving-member state without any row saying
+    so.
+    """
+    assert not is_a_duplication([("GEP", False), ("GVP", True)])
+    assert is_a_duplication([("GEP", False), ("GVP", False)])
+    assert Inventory.load(INVENTORY).is_cross_system_group("CG-MM-STOCK")
+
+
+def test_the_two_duplication_predicates_agree():
+    """One rule, two callers.
+
+    The inventory answer gates SI-CONV-001 and the scanner answer gates
+    whether the group is reported at all, so they cannot be allowed to
+    drift: a group that is a duplication to one and not to the other
+    leaves a finding on an object whose group appears in no table.
+    """
+    inventory = load_inventory()
+    result = legacy_scan()
+    groups = {group.group_id: group for group in result.convergence_groups()}
+    assert groups
+
+    for group_id in {
+        entry.convergence_group
+        for entry in inventory.entries
+        if entry.convergence_group
+    }:
+        assert inventory.is_cross_system_group(group_id) == (group_id in groups)
+
+
+def test_a_scan_of_one_system_directory_explains_the_groups_it_flags():
+    """Half an estate still raises SI-CONV-001, from the inventory.
+
+    The group cannot be priced off the one member in view, so the
+    alternative to naming it is a finding that points at a group no
+    table in the report mentions.
+    """
+    inventory = load_inventory()
+    result = scan(
+        [LEGACY / "gvp"], inventory=inventory, test_roots=[REPO_ROOT / "abap"]
+    )
+
+    flagged = {
+        finding.evidence
+        for obj in result.objects
+        for finding in obj.findings
+        if finding.rule.id == "SI-CONV-001"
+    }
+    assert flagged
+    assert not result.convergence_groups()
+    assert set(result.groups_beyond_scan()) == flagged
+
+    markdown = report.to_markdown(result)
+    for group_id in flagged:
+        assert group_id in markdown
+
+
+def test_a_scan_of_the_whole_estate_leaves_no_group_unexplained():
+    result = legacy_scan()
+    assert not result.groups_beyond_scan()
+
+
+def test_a_system_view_prices_its_groups_rather_than_deferring_them():
+    """`--system` scans the estate and narrows the view afterwards."""
+    result = legacy_scan()
+    result.filter(view=lambda obj: obj.source_system == "GVP")
+
+    assert result.convergence_groups()
+    assert not result.groups_beyond_scan()
+
+
+def test_a_pair_that_both_sides_switch_off_is_still_a_duplication():
+    """It is why the interface disappears - that saving is the point."""
+    assert is_a_duplication([("GEP", True), ("GVP", True)])
+    assert not is_a_duplication([("GEP", False), ("GVP", True)])
+    assert not is_a_duplication([("GEP", False), ("GEP", False)])
+    assert is_a_duplication([("GEP", False), ("GVP", False)])
 
 
 def test_object_name_is_derived_from_the_file_name():
@@ -48,7 +286,7 @@ def test_every_remediated_path_points_at_a_real_file():
 
 
 def test_remediated_objects_leave_the_backlog():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     remediated = {obj.object_name for obj in result.remediated()}
     assert "ZGSK_MM_STOCK_OVERVIEW" in remediated
     assert remediated & {obj.object_name for obj in result.objects_with_findings()}
@@ -56,19 +294,298 @@ def test_remediated_objects_leave_the_backlog():
 
 
 def test_remediation_moves_findings_from_outstanding_to_cleared():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     payload = json.loads(report.to_json(result))
     summary = payload["summary"]
 
     cleared = [obj for obj in result.remediated() if obj.findings]
+    # An object with findings is either still to do, already remediated,
+    # or dropped at the merge - the three are exhaustive and disjoint.
+    decommissioned = [
+        obj for obj in result.decommissioned()
+        if obj.findings and not obj.is_remediated
+    ]
     assert summary["outstanding_findings"] < summary["findings"]
-    assert summary["objects_outstanding"] + len(cleared) == (
+    assert summary["objects_outstanding"] + len(cleared) + len(decommissioned) == (
         summary["objects_with_findings"]
     )
     assert payload["cleared_effort"]["engineer_days"] > 0
     assert {item["object_name"] for item in payload["remediated"]} == {
         obj.object_name for obj in result.remediated()
     }
+
+
+def test_every_object_belongs_to_a_source_system():
+    inventory = load_inventory()
+    assert set(inventory.source_systems()) == {"GEP", "GVP"}
+    for entry in inventory:
+        expected = f"abap/ecc/{entry.source_system.lower()}/"
+        assert entry.path.startswith(expected), entry.object_name
+
+
+def test_scan_carries_the_source_system_through():
+    result = legacy_scan()
+    by_system = result.by_source_system()
+    assert set(by_system) == {"GEP", "GVP"}
+    assert all(by_system.values())
+    assert sum(len(objects) for objects in by_system.values()) == len(result.objects)
+
+
+def test_convergence_groups_pair_the_two_systems():
+    result = legacy_scan()
+    groups = result.convergence_groups()
+    assert groups
+    for group in groups:
+        assert group.source_systems == ["GEP", "GVP"]
+        assert len(group.objects) > 1
+
+
+def test_duplicated_function_is_raised_against_both_implementations():
+    result = legacy_scan()
+    flagged = {
+        obj.object_name: obj
+        for obj in result.objects
+        if any(finding.rule.id == "SI-CONV-001" for finding in obj.findings)
+    }
+    assert flagged
+
+    # Every member outstanding, not merely the group as a whole: the
+    # rule skips a member that is already rebuilt, so a group with one
+    # side built would fail this for the right reason and read as a
+    # bug. Picking on `is_remediated` alone passes only while the
+    # fully-outstanding group happens to sort first.
+    group = next(
+        group for group in result.convergence_groups()
+        if len(group.outstanding) == len(group.objects)
+    )
+    for obj in group.objects:
+        assert obj.object_name in flagged
+
+
+def test_a_view_filter_leaves_the_wave_it_was_taken_from_whole():
+    """The two filters have to land on different lists.
+
+    A wave narrows what is scanned; a system narrows what is shown of
+    it. Both were mutators once and only composed in one order, so
+    applying the view first set the estate to one system's objects and
+    dissolved every group. They are predicates now and `filter` orders
+    them itself - what is asserted here is the result: the view is one
+    system, the estate behind it is the whole wave.
+    """
+    result = scan(
+        [LEGACY],
+        inventory=load_inventory(),
+        test_roots=[REPO_ROOT / "abap"],
+    )
+    result.filter(
+        estate=lambda obj: obj.wave == "wave0",
+        view=lambda obj: obj.source_system == "GVP",
+    )
+
+    assert {obj.source_system for obj in result.objects} == {"GVP"}
+    assert {obj.source_system for obj in result.estate} == {"GEP", "GVP"}
+    assert {obj.wave for obj in result.estate} == {"wave0"}
+    # The groups survive the view, which is the whole point of keeping
+    # the estate: a group is cross-system by definition.
+    assert result.convergence_groups()
+    # And so the report's caveat about groups priced beyond the view is
+    # true here. It is asserted rather than assumed from the filter,
+    # because a group contained within one view would make it false.
+    assert result.groups_extend_beyond_view()
+
+
+def test_filtering_twice_gives_what_filtering_once_gives():
+    """Nothing may depend on `filter` being called exactly once.
+
+    The composition it replaced was correct only in one order. Reading
+    the current lists rather than the whole scan would bring that back
+    silently: the wave applied second would take its estate from the
+    system view and leave every convergence group dissolved.
+    """
+    def scanned() -> ScanResult:
+        return legacy_scan()
+
+    def wave(obj) -> bool:
+        return obj.wave == "wave0"
+
+    def system(obj) -> bool:
+        return obj.source_system == "GVP"
+
+    once = scanned()
+    once.filter(estate=wave, view=system)
+
+    for first, second in (({"estate": wave}, {"view": system}),
+                          ({"view": system}, {"estate": wave})):
+        twice = scanned()
+        twice.filter(**first)
+        twice.filter(**second)
+        assert [obj.path for obj in twice.objects] == [
+            obj.path for obj in once.objects
+        ]
+        assert [obj.path for obj in twice.estate] == [
+            obj.path for obj in once.estate
+        ]
+        assert {group.group_id for group in twice.convergence_groups()} == {
+            group.group_id for group in once.convergence_groups()
+        }
+
+
+def test_an_unfiltered_scan_makes_no_claim_about_work_out_of_view():
+    """The caveat is about groups, not about being filtered.
+
+    Printing "these groups have a member outside this view" over a
+    report where every member is on screen tells a reader their own
+    numbers are incomplete when they are not.
+    """
+    result = scan(
+        [LEGACY],
+        inventory=load_inventory(),
+        test_roots=[REPO_ROOT / "abap"],
+    )
+    assert result.convergence_groups()
+    assert not result.groups_extend_beyond_view()
+
+    # A view that keeps every member of every group: filtered, but
+    # nothing is priced out of sight.
+    in_groups = {
+        obj.path
+        for group in result.convergence_groups()
+        for obj in group.objects
+    }
+    result.filter(view=lambda obj: obj.path in in_groups)
+    assert result.is_partial_view
+    assert not result.groups_extend_beyond_view()
+
+
+def test_a_view_holding_every_priced_group_claims_the_days_as_its_own():
+    """A decommissioned pair half out of sight carries no days.
+
+    The caveat says the saving on screen belongs to the programme
+    rather than to this view. Quoted over an unpriced group it is a
+    false statement about numbers that are, in fact, all here.
+    """
+    result = legacy_scan()
+    dropped = [
+        group for group in result.convergence_groups() if group.is_decommissioned
+    ]
+    assert dropped
+
+    priced = {
+        obj.path
+        for group in result.priced_convergence_groups()
+        for obj in group.objects
+    }
+    # Everything priced, and one member of a decommissioned pair cut
+    # out of the view.
+    hidden = dropped[0].objects[0].path
+    assert hidden not in priced
+    result.filter(view=lambda obj: obj.path in priced or obj.path != hidden)
+
+    assert result.is_partial_view
+    assert not result.groups_extend_beyond_view()
+
+
+def test_a_merge_that_costs_more_than_it_saves_says_so():
+    """The small implementation is cheaper to rebuild than to reconcile.
+
+    Converging costs the larger implementation plus the fit-gap that
+    brings the smaller one into it, so a lopsided pair can cost more
+    merged than remediated in place. Clamped at zero that reads as a
+    merge worth nothing, which is a different instruction from one
+    worth not doing.
+    """
+    scanned = legacy_scan()
+    ordered = sorted(scanned.objects_with_findings(), key=lambda o: o.raw_effort_points)
+    biggest = ordered[-1]
+    # One finding against the estate's largest object: the fit-gap to
+    # reconcile it costs more than rebuilding it would.
+    slight = replace(
+        next(obj for obj in ordered if obj.source_system != biggest.source_system),
+        findings=ordered[0].findings[:1],
+    )
+
+    lopsided = ConvergenceGroup("CG-TEST")
+    lopsided.objects.extend([biggest, slight])
+    assert {obj.source_system for obj in lopsided.objects} == {"GEP", "GVP"}
+
+    estimate = report.ConvergenceEstimate.from_group(lopsided)
+
+    assert estimate.converged_days > estimate.independent_days
+    assert estimate.avoided_days < 0
+
+
+def test_a_pair_that_disappears_at_the_merge_is_not_a_fit_gap():
+    result = legacy_scan()
+    dropped = [
+        group for group in result.convergence_groups() if group.is_decommissioned
+    ]
+    assert dropped
+    for group in dropped:
+        for obj in group.objects:
+            rule_ids = {finding.rule.id for finding in obj.findings}
+            assert "SI-CONV-001" not in rule_ids
+
+
+def test_objects_dropped_at_the_merge_are_not_in_the_backlog():
+    result = legacy_scan()
+    decommissioned = result.decommissioned()
+    assert decommissioned
+    assert all(obj.findings for obj in decommissioned)
+
+    backlog = {obj.object_name for obj in report.build_backlog(result)}
+    outstanding = {obj.object_name for obj in result.outstanding()}
+    for obj in decommissioned:
+        assert obj.object_name not in backlog
+        assert obj.object_name not in outstanding
+
+
+def test_convergence_estimate_is_cheaper_than_remediating_both():
+    result = legacy_scan()
+    estimates = report.convergence_estimates(result)
+    assert estimates
+    assert {estimate.group_id for estimate in estimates} == {
+        group.group_id
+        for group in result.convergence_groups()
+        if not group.is_decommissioned and len(group.outstanding) > 1
+    }
+    for estimate in estimates:
+        assert estimate.source_systems == ("GEP", "GVP")
+        assert estimate.converged_days < estimate.independent_days
+        assert estimate.avoided_days > 0
+
+
+def test_a_group_whose_counterpart_is_built_claims_no_saving():
+    """The saving was banked when the first object was rebuilt."""
+    result = legacy_scan()
+    settled = report.groups_with_built_counterpart(result)
+    assert settled
+
+    priced = {estimate.group_id for estimate in report.convergence_estimates(result)}
+    for group in settled:
+        assert group.group_id not in priced
+        assert any(obj.is_remediated for obj in group.objects)
+
+
+def test_convergence_estimate_ignores_an_already_remediated_member():
+    result = legacy_scan()
+    for estimate in report.convergence_estimates(result):
+        group = next(
+            group for group in result.convergence_groups()
+            if group.group_id == estimate.group_id
+        )
+        outstanding_days = round(
+            sum(report._days(obj.weighted_effort_points) for obj in group.outstanding),
+            1,
+        )
+        assert estimate.independent_days == outstanding_days
+
+
+def test_the_object_left_over_still_must_not_be_remediated_alone():
+    """Its counterpart exists in S/4HANA, so it folds into that."""
+    result = legacy_scan()
+    for group in report.groups_with_built_counterpart(result):
+        for obj in group.outstanding:
+            assert "SI-CONV-001" in {finding.rule.id for finding in obj.findings}
 
 
 def test_every_legacy_source_is_in_the_inventory():
@@ -79,7 +596,7 @@ def test_every_legacy_source_is_in_the_inventory():
 
 
 def test_legacy_estate_has_blocking_findings():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     assert result.has_severity(Severity.BLOCKER)
     assert len(result.objects_with_findings()) == len(result.objects)
 
@@ -93,7 +610,7 @@ def test_remediated_reference_is_clean():
 
 def test_stock_overview_findings_name_the_expected_rules():
     result = scan_file(
-        LEGACY / "mm" / "zgsk_mm_stock_overview.prog.abap",
+        LEGACY / "gep" / "mm" / "zgsk_mm_stock_overview.prog.abap",
         inventory=load_inventory(),
         test_roots=[REPO_ROOT / "abap"],
     )
@@ -105,7 +622,7 @@ def test_stock_overview_findings_name_the_expected_rules():
 
 def test_gxp_rule_only_fires_for_gxp_objects_without_tests():
     inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     flagged = {
         obj.object_name
         for obj in result.objects
@@ -118,8 +635,7 @@ def test_gxp_rule_only_fires_for_gxp_objects_without_tests():
 
 
 def test_validation_multiplier_inflates_gxp_effort():
-    inventory = load_inventory()
-    result = scan([LEGACY], inventory=inventory, test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     gxp_objects = [obj for obj in result.objects if obj.gxp_class == "gxp_critical"]
     assert gxp_objects
     for obj in gxp_objects:
@@ -137,15 +653,15 @@ def test_rule_filter_restricts_the_scan():
 
 
 def test_backlog_is_ordered_by_wave_then_severity():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     backlog = report.build_backlog(result)
     waves = [obj.wave for obj in backlog]
-    assert waves == sorted(waves, key=lambda wave: report.WAVE_ORDER[wave])
+    assert waves == sorted(waves, key=wave_rank)
     assert backlog[0].wave == "wave0"
 
 
 def test_markdown_report_contains_the_key_sections():
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     markdown = report.to_markdown(result)
     for heading in (
         "# Custom code remediation backlog",
@@ -160,8 +676,34 @@ def test_markdown_report_contains_the_key_sections():
 def test_json_report_is_machine_readable():
     import json
 
-    result = scan([LEGACY], inventory=load_inventory(), test_roots=[REPO_ROOT / "abap"])
+    result = legacy_scan()
     payload = json.loads(report.to_json(result))
     assert payload["summary"]["findings"] == len(result.findings)
     assert payload["effort"]["engineer_days"] > 0
     assert payload["objects"][0]["wave"] == "wave0"
+
+
+def test_the_json_feed_says_when_its_saving_is_the_programmes():
+    """The other two renderings say it in words; this one has none.
+
+    A group is priced whole under `--system`, deliberately - half a
+    merge is a wrong number rather than a partial one. Unflagged in a
+    machine-readable feed, a dashboard given one file per system adds
+    the same saving up twice.
+    """
+    import json
+
+    whole = json.loads(report.to_json(legacy_scan()))
+    assert whole["merge"]["convergence_days_beyond_view"] is False
+
+    result = legacy_scan()
+    result.filter(view=lambda obj: obj.source_system == "GVP")
+    view = json.loads(report.to_json(result))
+
+    assert view["merge"]["convergence_days_beyond_view"] is True
+    # The flag is worth having precisely because the figure does not
+    # move: nothing else in the file distinguishes the two.
+    assert (
+        view["merge"]["convergence_avoided_days"]
+        == whole["merge"]["convergence_avoided_days"]
+    )

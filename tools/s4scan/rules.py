@@ -50,6 +50,7 @@ class Category(str, Enum):
     MASTER_DATA = "master_data"
     TECHNICAL_DEBT = "technical_debt"
     VALIDATION = "validation"
+    CONVERGENCE = "convergence"
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,22 @@ class Rule:
     write_only: bool = False
     patterns: tuple[re.Pattern[str], ...] = ()
     requires_loop: bool = False
+    # Compiled once for the rule rather than per statement. The table
+    # list stays the readable form: `tables=("MKPF", "MSEG")` is what a
+    # reader checks against the simplification item, `\bMKPF\b` is not.
+    _table_patterns: tuple[tuple[str, re.Pattern[str]], ...] = field(
+        default=(), init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "_table_patterns",
+            tuple(
+                (table, re.compile(rf"\b{table}\b", re.IGNORECASE))
+                for table in self.tables
+            ),
+        )
 
     def evidence(self, statement) -> str | None:
         """Return the matched text if the statement violates this rule."""
@@ -79,8 +96,8 @@ class Rule:
                 return None
             if self.write_only and not _WRITE_STATEMENT.match(text):
                 return None
-            for table in self.tables:
-                if re.search(rf"\b{table}\b", text, re.IGNORECASE):
+            for table, pattern in self._table_patterns:
+                if pattern.search(text):
                     return table.upper()
 
         for pattern in self.patterns:
@@ -401,6 +418,22 @@ RULES: tuple[Rule, ...] = (
 
 
 OBJECT_RULES: tuple[Rule, ...] = (
+    Rule(
+        id="SI-CONV-001",
+        title="Function implemented separately in both ECC systems",
+        category=Category.CONVERGENCE,
+        severity=Severity.CRITICAL,
+        effort_points=8,
+        guidance=(
+            "The core and Vaccines systems each grew their own "
+            "implementation of this function. The target is one object, "
+            "so the functional divergence between the two has to be "
+            "resolved in fit-gap before either is remediated - "
+            "remediating both in place carries the duplication into "
+            "S/4HANA and doubles the validation package."
+        ),
+        sap_reference="System consolidation / selective data transition",
+    ),
     Rule(
         id="SI-GXP-001",
         title="GxP object has no automated test evidence",

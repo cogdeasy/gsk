@@ -13,6 +13,44 @@ def _run_from_repo_root(monkeypatch):
     monkeypatch.chdir(REPO_ROOT)
 
 
+def _group_count(output: str) -> int:
+    """The convergence groups a scan reports, read off its summary.
+
+    Read rather than asserted: `AGENTS.md` keeps tests off estate
+    totals, because those move whenever the inventory does. What the
+    tests below compare is one scan's count against another's.
+    """
+    line = next(
+        line for line in output.splitlines()
+        if line.startswith("convergence groups")
+    )
+    return int(line.split(":", 1)[1].split()[0])
+
+
+_SUMMARY: dict[tuple[str, ...], str] = {}
+
+
+def summary(capsys, *args: str) -> str:
+    """The scan summary for one argument list, produced once per run.
+
+    The scan reads the estate and writes nothing, so the same arguments
+    give the same output however many tests ask for it. Running it
+    again per assertion re-parses every ABAP file in both systems, and
+    `AGENTS.md` holds the suite to a second.
+    """
+    argv = ("scan", *args)
+    if argv not in _SUMMARY:
+        assert s4scan_cli.main(list(argv)) == 0
+        _SUMMARY[argv] = capsys.readouterr().out
+    else:
+        # Drained on the way out either way. A cached call that left the
+        # buffer alone would make a later `readouterr()` in the same
+        # test return whatever the run before it printed, and only for
+        # the tests that happen not to be first.
+        capsys.readouterr()
+    return _SUMMARY[argv]
+
+
 def test_s4scan_rules_command_lists_the_catalogue(capsys):
     assert s4scan_cli.main(["rules"]) == 0
     output = capsys.readouterr().out
@@ -20,8 +58,38 @@ def test_s4scan_rules_command_lists_the_catalogue(capsys):
     assert "SI-GXP-001" in output
 
 
+def test_s4scan_reports_a_mis_edited_inventory_as_an_operator_error(
+    tmp_path, capsys
+):
+    """The message names the group and the waves; a stack trace buries it."""
+    rows = (REPO_ROOT / "estate" / "inventory.csv").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    header = rows[0].split(",")
+    group = header.index("convergence_group")
+    wave = header.index("wave")
+    edited = [rows[0]]
+    moved = False
+    for row in rows[1:]:
+        cells = row.split(",")
+        if cells[group] and not moved:
+            cells[wave] = "wave9"
+            moved = True
+        edited.append(",".join(cells))
+    inventory = tmp_path / "inventory.csv"
+    inventory.write_text("\n".join(edited) + "\n", encoding="utf-8")
+
+    exit_code = s4scan_cli.main(
+        ["scan", "abap/ecc", "--inventory", str(inventory)]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "wave9" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_s4scan_fail_on_blocker_gates_the_legacy_estate(capsys):
-    exit_code = s4scan_cli.main(["scan", "abap/src", "--fail-on", "blocker"])
+    exit_code = s4scan_cli.main(["scan", "abap/ecc", "--fail-on", "blocker"])
     capsys.readouterr()
     assert exit_code == 1
 
@@ -32,10 +100,103 @@ def test_s4scan_passes_on_the_remediated_reference(capsys):
     assert exit_code == 0
 
 
+def test_s4scan_system_filter_restricts_the_scan(capsys):
+    both = summary(capsys, "abap/ecc")
+    vaccines_only = summary(capsys, "abap/ecc", "--system", "GVP")
+
+    assert "GEP" in both and "GVP" in both
+    assert "GVP" in vaccines_only
+    assert "GEP" not in vaccines_only
+
+
+def test_a_single_system_view_still_prices_the_duplication(capsys):
+    """One estate cannot see its own duplication dissolve.
+
+    A convergence group is cross-system by definition, so grouping over
+    the filtered objects would leave one member in each and report that
+    nothing is duplicated - while the same output flags every one of
+    those objects with SI-CONV-001.
+    """
+    both = summary(capsys, "abap/ecc")
+    vaccines_only = summary(capsys, "abap/ecc", "--system", "GVP")
+
+    # The same groups, not a fixed number of them: how many the estate
+    # holds moves with the inventory, and pinning it would break this
+    # test for a change it is not about.
+    assert _group_count(vaccines_only) == _group_count(both)
+    assert _group_count(both) > 0
+    # The days belong to the group, not to the system looking at it.
+    assert "not this view's" in vaccines_only
+    assert "not this view's" not in both
+
+
+def test_a_wave_view_prices_only_its_own_groups(capsys):
+    """A wave is a plan, so a group outside it is out of scope.
+
+    Unlike --system, which narrows the view onto an estate the groups
+    still span, --wave narrows the estate itself: the group is planned
+    and delivered as one piece of work within a wave.
+    """
+    every_wave = summary(capsys, "abap/ecc")
+    wave0 = summary(capsys, "abap/ecc", "--wave", "wave0")
+    wave1 = summary(capsys, "abap/ecc", "--wave", "wave1")
+
+    # Each wave holds some of the groups and the waves together hold
+    # all of them - a group belongs to exactly one wave, which the
+    # inventory enforces and this asserts without counting anything.
+    assert 0 < _group_count(wave0) < _group_count(every_wave)
+    assert 0 < _group_count(wave1) < _group_count(every_wave)
+    assert _group_count(wave0) + _group_count(wave1) == _group_count(every_wave)
+    assert "not this view's" not in wave0
+
+
+def test_narrowing_a_wave_within_a_system_view_keeps_the_view(capsys):
+    """The two filters compose without an order to get wrong.
+
+    `--wave` narrows the estate and `--system` narrows the view of it.
+    Applied together, the wave must still scope the groups and the
+    system must still leave them whole - a system view that dissolved
+    them would report no convergence at all.
+    """
+    filtered = summary(capsys, "abap/ecc", "--wave", "wave0", "--system", "GVP")
+    wave0 = summary(capsys, "abap/ecc", "--wave", "wave0")
+
+    assert _group_count(filtered) == _group_count(wave0)
+    assert _group_count(filtered) > 0
+    assert "not this view's" in filtered
+
+
+def test_s4scan_summary_reports_the_merge(capsys):
+    output = summary(capsys, "abap/ecc")
+    assert "convergence groups" in output
+    assert "decommissioned" in output
+
+
+def test_s4scan_summary_accounts_for_every_duplication_it_flags(capsys):
+    """A group whose counterpart is built is priced nowhere.
+
+    It still raises SI-CONV-001, so on the priced count alone the
+    summary looks like it has mislaid a group, and only the markdown
+    report says otherwise.
+    """
+    output = summary(capsys, "abap/ecc")
+    groups = {
+        line.split(":", 1)[0].strip(): int(line.split(":", 1)[1].split()[0])
+        for line in output.splitlines()
+        if line.startswith(("convergence groups", "groups already built"))
+    }
+    assert groups["groups already built"] > 0
+    duplications = next(
+        int(line.split()[1]) for line in output.splitlines()
+        if line.strip().startswith("SI-CONV-001")
+    )
+    assert duplications > groups["convergence groups"]
+
+
 def test_s4scan_writes_a_report(tmp_path, capsys):
     out_file = tmp_path / "backlog.md"
     exit_code = s4scan_cli.main(
-        ["scan", "abap/src", "--format", "markdown", "--out", str(out_file)]
+        ["scan", "abap/ecc", "--format", "markdown", "--out", str(out_file)]
     )
     capsys.readouterr()
     assert exit_code == 0

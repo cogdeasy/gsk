@@ -1,3 +1,5 @@
 rule_id,action,object,key,field,message
-DQ-FI-001,reject,open_items,IE01/4900000772/2026,DMBTR,document does not balance: debit 733000.00 credit 733000.10
-DQ-FI-002,reject,open_items,DE01/5900003311/2026,PARTNER,partner 0000210099 is not in the migrated master data
+DQ-FI-001,reject,open_items,GEP/IE01/4900000772/2026,DMBTR,document does not balance: debit 733000.00 credit 733000.10
+DQ-FI-002,reject,open_items,GEP/DE01/5900003311/2026,PARTNER,customer 0000210099 is not in the migrated master data for GEP
+DQ-FI-003,warn,open_items,GVP/BE02/1900008804/2026,ZFBDT,"open item has no baseline date, ageing will be wrong"
+DQ-FI-001,reject,open_items,GVP/BE02/1900008805/2026,DMBTR,document does not balance: debit 505000.00 credit 450000.00

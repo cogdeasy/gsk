@@ -40,14 +40,14 @@ jobs:
 
       - name: Regenerate the remediation backlog
         run: |
-          s4scan scan abap/src --format markdown --out reports/remediation-backlog.md
-          s4scan scan abap/src --format json --out reports/remediation-backlog.json
+          s4scan scan abap/ecc --format markdown --out reports/remediation-backlog.md
+          s4scan scan abap/ecc --format json --out reports/remediation-backlog.json
 
       - name: Fail if the committed backlog is stale
         run: git diff --exit-code reports/
 
       - name: Estate summary
-        run: s4scan scan abap/src
+        run: s4scan scan abap/ecc
 
       - name: Remediated reference must stay clean
         run: s4scan scan abap/remediated --fail-on minor

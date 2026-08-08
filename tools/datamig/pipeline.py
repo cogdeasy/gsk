@@ -1,4 +1,11 @@
-"""Wave pipeline: extract, cleanse, map, load, reconcile."""
+"""Wave pipeline: extract, cleanse, map, load, reconcile.
+
+Both ECC systems are processed in one run rather than one after the
+other. The merge is the reason: whether two records become one target
+record can only be decided with both systems in front of you, and the
+reconciliation has to prove the resulting arithmetic - source records
+minus merges equals target records - across the pair.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +13,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import cleanse, extract, load, mapping, reconcile
-from .cleanse import Action, CleanseResult
-from .identity import partner_identity
+from .cleanse import CleanseResult
+from .identity import (
+    PARTNER_TYPE_OF,
+    material_key,
+    material_lookup_key,
+    partner_identity,
+    partner_ref,
+    source_key,
+)
 from .reconcile import ObjectCounts, Reconciliation
 
 
@@ -17,6 +31,7 @@ class PipelineResult:
     out_dir: Path
     cleansing: dict[str, CleanseResult] = field(default_factory=dict)
     business_partners: mapping.BusinessPartnerResult | None = None
+    product_result: mapping.ProductResult | None = None
     products: list[dict[str, str]] = field(default_factory=list)
     open_items: list[dict[str, str]] = field(default_factory=list)
     stock: list[dict[str, str]] = field(default_factory=list)
@@ -37,7 +52,10 @@ class PipelineResult:
 
 
 def _warnings(result: CleanseResult) -> int:
-    return result.counts_by_action()[Action.WARN.value]
+    # Only the ones on records that load. The rest are in the exception
+    # pack against a record the wave holds back, so counting them here
+    # would put work in the reconciliation table that cannot be done.
+    return len(result.warnings_on_loaded())
 
 
 def _keys(rows: list[dict[str, str]], *fields: str) -> frozenset[str]:
@@ -54,22 +72,48 @@ def run(
     result = PipelineResult(wave=wave, out_dir=out_path)
 
     datasets = extract.extract_wave(source_dir)
+    harmonisation = mapping.ProductHarmonisation(
+        extract.read_harmonisation(Path(source_dir) / extract.HARMONISATION_FILE)
+    )
 
-    materials = cleanse.cleanse_materials(datasets["materials"].rows)
+    materials = cleanse.cleanse_materials(
+        datasets["materials"].rows,
+        harmonisation.targets,
+        harmonisation.ruled_separate,
+    )
     customers = cleanse.cleanse_partners(
         datasets["customers"].rows, "customers", "KUNNR"
     )
     vendors = cleanse.cleanse_partners(datasets["vendors"].rows, "vendors", "LIFNR")
 
-    known_partners = {row["KUNNR"] for row in customers.accepted}
-    known_partners |= {row["LIFNR"] for row in vendors.accepted}
+    # Typed, because an open item names a customer or a vendor and the
+    # two number ranges are only disjoint by convention.
+    known_partners = {
+        partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["KNA1"], row["KUNNR"])
+        for row in customers.accepted
+    }
+    known_partners |= {
+        partner_ref(row["SOURCE_SYSTEM"], PARTNER_TYPE_OF["LFA1"], row["LIFNR"])
+        for row in vendors.accepted
+    }
+    # A partner cleansing held back is absent by decision, and an open
+    # item naming it is held for that reason rather than for a master
+    # nobody can find. Same cascade as stock behind a held material.
+    held_partners = cleanse.held_partner_refs(
+        customers, PARTNER_TYPE_OF["KNA1"]
+    ) | cleanse.held_partner_refs(vendors, PARTNER_TYPE_OF["LFA1"])
     open_items = cleanse.cleanse_open_items(
-        datasets["open_items"].rows, known_partners
+        datasets["open_items"].rows, known_partners, held_partners
     )
 
-    accepted_materials = {row["MATNR"]: row for row in materials.accepted}
+    accepted_materials = {
+        material_lookup_key(row): row for row in materials.accepted
+    }
     batch_stock = cleanse.cleanse_batch_stock(
-        datasets["batch_stock"].rows, accepted_materials
+        datasets["batch_stock"].rows,
+        accepted_materials,
+        materials.harmonisation_holds,
+        materials.collision_holds,
     )
 
     result.cleansing = {
@@ -84,12 +128,18 @@ def run(
         customers.accepted, vendors.accepted
     )
     result.business_partners = partners
-    result.products = [mapping.map_material(row) for row in materials.accepted]
+    products = mapping.convert_to_products(materials.accepted, harmonisation)
+    result.product_result = products
+    result.products = products.products
     result.open_items = [
         mapping.map_open_item(row, partners.xref) for row in open_items.accepted
     ]
+    # Bound once: `lookup` builds the table from the cross reference on
+    # every read, and inside the comprehension that is once per batch.
+    product_lookup = products.lookup
     result.stock = [
-        mapping.map_stock(row, accepted_materials) for row in batch_stock.accepted
+        mapping.map_stock(row, accepted_materials, product_lookup)
+        for row in batch_stock.accepted
     ]
 
     # The target side of each count check is read off the rows that will
@@ -97,9 +147,29 @@ def run(
     # that drops, duplicates or invents a record breaks the check.
     bp_rows = [partner.as_row() for partner in partners.partners]
     xref_rows = partners.xref_rows()
+    # Counted off the cross reference that will be written rather than
+    # off the mapping's own tally. Taking it from BusinessPartnerResult
+    # makes REC-MRG-001 compare a number with itself: a record lost
+    # between cleansing and load would move both sides together.
+    merged_partners = len(xref_rows) - len(
+        {row["BusinessPartner"] for row in xref_rows}
+    )
     loaded_sources = {
         source_type: frozenset(
-            row["SourceId"] for row in xref_rows if row["SourceType"] == source_type
+            f"{row['SourceSystem']}/{row['SourceId']}"
+            for row in xref_rows
+            if row["SourceType"] == source_type
+        )
+        for source_type in ("KNA1", "LFA1")
+    }
+    # Rows, not distinct keys. A set cannot count a source record
+    # written under two business partners: `loaded` would still equal
+    # the accepted count and both partner checks would pass while the
+    # target held one customer twice. `ObjectCounts.duplicated` is the
+    # difference between the two, which is why it needs both.
+    loaded_rows = {
+        source_type: sum(
+            1 for row in xref_rows if row["SourceType"] == source_type
         )
         for source_type in ("KNA1", "LFA1")
     }
@@ -108,40 +178,77 @@ def run(
         ObjectCounts(
             "materials", materials.source_count, len(materials.rejected),
             len(result.products), _warnings(materials),
+            # Expected is the set of harmonised product numbers, not
+            # the set of source materials: merged materials are
+            # deliberately absent from the load file. Derived from the
+            # accepted ECC rows and the governed decision table rather
+            # than from the mapping's own cross reference, so a defect
+            # in the mapping cannot cancel itself out on both sides.
+            # A merged material contributes its survivor's key, so this
+            # check sees a dropped, duplicated or invented record only
+            # for the materials that keep their own number. The merged
+            # ones are covered by REC-MRG-002 and REC-MRG-003.
             source_keys=frozenset(
-                mapping.strip_leading_zeros(row["MATNR"]) for row in materials.accepted
+                harmonisation.target_product(row) for row in materials.accepted
             ),
             target_keys=_keys(result.products, "Product"),
+            merged=products.merged_count,
         ),
+        # `loaded` is the count of rows that will be written, not of
+        # records that survived cleansing. For a customer that is the
+        # KNA1 side of the cross reference: partners are merged, so
+        # there is no one row per record to count, and taking it from
+        # `accepted` would make REC-ARI-customers restate its own
+        # source side and pass however many records mapping lost.
         ObjectCounts(
             "customers", customers.source_count, len(customers.rejected),
-            len(customers.accepted), _warnings(customers),
-            source_keys=_keys(customers.accepted, "KUNNR"),
+            loaded_rows["KNA1"], _warnings(customers),
+            source_keys=frozenset(
+                source_key(row, "KUNNR") for row in customers.accepted
+            ),
             target_keys=loaded_sources["KNA1"],
         ),
         ObjectCounts(
             "vendors", vendors.source_count, len(vendors.rejected),
-            len(vendors.accepted), _warnings(vendors),
-            source_keys=_keys(vendors.accepted, "LIFNR"),
+            loaded_rows["LFA1"], _warnings(vendors),
+            source_keys=frozenset(
+                source_key(row, "LIFNR") for row in vendors.accepted
+            ),
             target_keys=loaded_sources["LFA1"],
         ),
         ObjectCounts(
             "open_items", open_items.source_count, len(open_items.rejected),
             len(result.open_items), _warnings(open_items),
-            source_keys=_keys(open_items.accepted, "BUKRS", "BELNR", "GJAHR", "BUZEI"),
+            source_keys=_keys(
+                open_items.accepted,
+                "SOURCE_SYSTEM", "BUKRS", "BELNR", "GJAHR", "BUZEI",
+            ),
             target_keys=_keys(
-                result.open_items, "CompanyCode", "AccountingDocument",
-                "FiscalYear", "AccountingDocumentItem",
+                result.open_items, "SourceSystem", "CompanyCode",
+                "AccountingDocument", "FiscalYear", "AccountingDocumentItem",
             ),
         ),
         ObjectCounts(
             "batch_stock", batch_stock.source_count, len(batch_stock.rejected),
             len(result.stock), _warnings(batch_stock),
+            # Derived from the governed decision table for the same
+            # reason as the materials check above: map_stock resolves
+            # the product through the product cross reference, so
+            # reading the ECC side out of that same reference would move both
+            # sides together and a batch put onto the wrong survivor
+            # would reconcile clean.
+            #
+            # The independence is from the mapping, not from the
+            # decision table: both sides call `target_product`, so a
+            # defect in the harmonisation key itself moves them
+            # together and this check stays green. REC-MRG-003 is the
+            # one that reads the survivor off the load file.
             source_keys=frozenset(
                 "/".join(
                     (
+                        row["SOURCE_SYSTEM"],
                         row["WERKS"],
-                        mapping.strip_leading_zeros(row["MATNR"]),
+                        harmonisation.target_product(row),
                         row["LGORT"],
                         row["CHARG"],
                     )
@@ -149,7 +256,8 @@ def run(
                 for row in batch_stock.accepted
             ),
             target_keys=_keys(
-                result.stock, "Plant", "Product", "StorageLocation", "Batch"
+                result.stock, "SourceSystem", "Plant", "Product",
+                "StorageLocation", "Batch",
             ),
         ),
     ]
@@ -167,8 +275,27 @@ def run(
             {partner_identity(row) for row in accepted_partner_rows}
         ),
         business_partners=len({row["BusinessPartner"] for row in bp_rows}),
-        merged_partners=partners.merged_count,
+        merged_partners=merged_partners,
         xref=partners.xref,
+        cross_system_partners=len(partners.cross_system_partners),
+        source_systems=sorted(extract.SOURCE_SYSTEMS),
+        accepted_by_system=_accepted_by_system(result.cleansing),
+        products=products,
+        harmonisation=harmonisation,
+        # Same key the decisions are held under, or a decision written
+        # with an unpadded number would look unapplied rather than held.
+        rejected_materials={
+            material_key(row["SOURCE_SYSTEM"], row["MATNR"])
+            for row in materials.rejected
+        },
+        accepted_materials=materials.accepted,
+        # Every number the extract knows about, accepted or not. A
+        # harmonisation decision naming a product outside this set names
+        # a product that exists in neither system.
+        extracted_products={
+            mapping.strip_leading_zeros(row["MATNR"])
+            for row in datasets["materials"].rows
+        },
     )
 
     if write_files:
@@ -177,9 +304,28 @@ def run(
     return result
 
 
+def _accepted_by_system(
+    cleansing: dict[str, CleanseResult],
+) -> dict[str, dict[str, int]]:
+    """Accepted record counts per object per source system."""
+    counts: dict[str, dict[str, int]] = {}
+    for name, cleanse_result in cleansing.items():
+        per_system: dict[str, int] = {}
+        for row in cleanse_result.accepted:
+            system = row["SOURCE_SYSTEM"]
+            per_system[system] = per_system.get(system, 0) + 1
+        counts[name] = dict(sorted(per_system.items()))
+    return counts
+
+
 def _write(result: PipelineResult, partners: mapping.BusinessPartnerResult) -> None:
     out_dir = result.out_dir
     result.written.append(load.write_load_file(out_dir, "products", result.products))
+    result.written.append(
+        load.write_load_file(
+            out_dir, "product_xref", result.product_result.xref_rows()
+        )
+    )
     result.written.append(
         load.write_load_file(
             out_dir, "business_partners",

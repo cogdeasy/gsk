@@ -6,17 +6,28 @@ than confirmed fact are marked as such there and here.
 
 ## The estate being migrated
 
-- A single global SAP ECC 6.0 core, reached through a decade of "ERP
-  unification" wave deployments across the 2010s.
+Two SAP ECC 6.0 production systems, not one:
+
+| System | Scope | Modelled in |
+| --- | --- | --- |
+| **GEP** | The GSK core. Pharma and consumer, reached through a decade of "ERP unification" wave deployments across the 2010s. | `abap/ecc/gep`, `data/wave0/gep` |
+| **GVP** | GSK Vaccines. A separate instance with its own client, its own number ranges and its own development history. | `abap/ecc/gvp`, `data/wave0/gvp` |
+
+Both are in scope, and both land in **one** S/4HANA client. That makes
+this a consolidation as well as a conversion, and the consolidation is
+the part with no SAP tool to run: see `docs/CONVERGENCE.md`.
+
 - Nominally unified, actually highly variant: process mining surfaced
   roughly 28,000 variants of a single sales-order process. The variant
   count is the real migration problem, and it is visible in this
   repository as the market-by-market accretion in
-  `abap/src/exits/zxvedu01_sales_order.exit.abap`.
-- Large operational footprint on that one core: ~37 manufacturing
-  sites, operations in 75+ countries, manufacturing, supply chain,
-  finance, procurement (Ariba), intercompany profit tracking, and label
-  printing at 3,500+ printers through Loftware.
+  `abap/ecc/gep/exits/zxvedu01_sales_order.exit.abap`.
+- Large operational footprint: ~37 manufacturing sites, operations in
+  75+ countries, manufacturing, supply chain, finance, procurement
+  (Ariba), intercompany profit tracking, and label printing at 3,500+
+  printers through Loftware. Vaccines adds antigen bulk campaigns,
+  cold-chain and ultra-cold storage, OCABR batch certification and
+  serialisation obligations that the core system has no equivalent of.
 - GxP-regulated throughout. The ERP is a validated system; every change
   needs computer system validation. This is the single biggest cost
   multiplier compared with a non-pharma migration, and it is why the
@@ -47,9 +58,12 @@ is the representative subset, `wave1` and `wave2` follow.
 | Workstream | Character | Modelled here |
 | --- | --- | --- |
 | Custom code remediation | Tens of thousands of objects, pattern heavy | Yes - `tools/s4scan`, `abap/` |
+| Custom code convergence | Duplicated objects across the two systems, resolved to one target design | Yes - `SI-CONV-001`, `docs/CONVERGENCE.md` |
 | Process standardisation | Fit-gap and template governance per market | No - business-led |
 | Data migration and master data cleansing | Per wave, repeated, reconciliation heavy | Yes - `tools/datamig`, `data/` |
-| Interface re-pointing | Hundreds of integrations, re-tested per wave | Partly - `abap/src/if/` |
+| Cross-system master data harmonisation | Same counterparty and product mastered twice, merged once | Yes - `REC-MRG-*`, `data/wave0/material_harmonisation.csv` |
+| Interface re-pointing | Hundreds of integrations, re-tested per wave | Partly - `abap/ecc/*/if/` |
+| Interface decommissioning | Integrations that exist only because the systems are separate | Yes - `disposition=decommission` in the inventory |
 | GxP validation and testing | Typically 30-40% of programme effort in pharma | Yes - `docs/VALIDATION.md`, rule `SI-GXP-001` |
 | Cutover and hypercare per wave | Rehearsed, reconciled, repeated | Partly - reconciliation evidence |
 | Change management and training | People-led | No |
@@ -62,6 +76,13 @@ PRs; generating and maintaining regression suites and validation
 documentation drafts per wave; writing and iterating extraction,
 cleansing and mapping pipelines with reconciliation evidence; and the
 repetitive re-pointing and re-testing of interfaces per wave.
+
+The consolidation adds a second kind: reading two implementations of
+the same function side by side and stating precisely where they differ.
+That is the work that decides the target design, it is currently done
+by hand by people who know one system but rarely both, and it is
+exactly the kind of comparison that does not get cheaper with more
+people.
 
 This repository is the concrete version of that argument: the estate,
 the measurement, the target pattern, and the evidence trail - all of it
