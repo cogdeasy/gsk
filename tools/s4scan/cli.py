@@ -56,7 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument(
         "--system", choices=sorted(SOURCE_SYSTEMS),
-        help="restrict the scan to one ECC source system",
+        help=(
+            "report and gate on one ECC source system; convergence groups "
+            "stay whole, so their days are still the programme's"
+        ),
     )
     scan_parser.add_argument(
         "--rule", action="append", default=[], help="only run these rule ids",

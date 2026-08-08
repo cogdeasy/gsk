@@ -681,3 +681,29 @@ def test_json_report_is_machine_readable():
     assert payload["summary"]["findings"] == len(result.findings)
     assert payload["effort"]["engineer_days"] > 0
     assert payload["objects"][0]["wave"] == "wave0"
+
+
+def test_the_json_feed_says_when_its_saving_is_the_programmes():
+    """The other two renderings say it in words; this one has none.
+
+    A group is priced whole under `--system`, deliberately - half a
+    merge is a wrong number rather than a partial one. Unflagged in a
+    machine-readable feed, a dashboard given one file per system adds
+    the same saving up twice.
+    """
+    import json
+
+    whole = json.loads(report.to_json(legacy_scan()))
+    assert whole["merge"]["convergence_days_beyond_view"] is False
+
+    result = legacy_scan()
+    result.filter(view=lambda obj: obj.source_system == "GVP")
+    view = json.loads(report.to_json(result))
+
+    assert view["merge"]["convergence_days_beyond_view"] is True
+    # The flag is worth having precisely because the figure does not
+    # move: nothing else in the file distinguishes the two.
+    assert (
+        view["merge"]["convergence_avoided_days"]
+        == whole["merge"]["convergence_avoided_days"]
+    )

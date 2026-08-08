@@ -112,6 +112,7 @@
       }
     ],
     "convergence_avoided_days": 46.5,
+    "convergence_days_beyond_view": false,
     "unpriced_convergence_groups": [],
     "decommission_avoided_days": 19.6,
     "decommissioned": [

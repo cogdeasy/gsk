@@ -193,6 +193,12 @@ def to_json(result: ScanResult) -> str:
             "convergence_avoided_days": round(
                 sum(estimate.avoided_days for estimate in convergence), 1
             ),
+            # True when a priced group has a member outside this view.
+            # The days above are then the whole group's, as they are in
+            # the summary and the markdown, both of which say so in
+            # words. Unsaid here, a dashboard fed one feed per system
+            # adds the same saving up twice.
+            "convergence_days_beyond_view": result.groups_extend_beyond_view(),
             # Groups this scan flags but cannot cost, because it holds
             # only one side of them. Empty for a scan of the estate.
             "unpriced_convergence_groups": result.groups_beyond_scan(),

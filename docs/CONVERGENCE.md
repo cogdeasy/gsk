@@ -213,6 +213,12 @@ for. Three rules can hold a merged material - `DQ-MAT-010`, `-011` and
 `-012` - and they are three different pieces of work, so the stock
 reject quotes whichever one actually fired rather than a fixed one.
 
+Where a survivor is both claimed by two products and retired by another
+decision, the collision is what the exception names. Both are wrong and
+both need settling, but only one is what the record is waiting on:
+rewriting the chain leaves the decision pointing at a product two
+records still claim, and the load does not move.
+
 **The merge is reconciled, not assumed.** With two sources loading into
 one client, fewer target records than source records is the intended
 outcome - which is also exactly what data loss looks like. So:

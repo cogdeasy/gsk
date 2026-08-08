@@ -1037,6 +1037,38 @@ def test_a_target_retired_by_the_other_system_is_still_a_chain():
     assert not outcome.issues_for("DQ-MAT-010")
 
 
+def test_a_survivor_both_collided_and_retired_names_the_collision():
+    """Both are wrong; only one is what this record waits on.
+
+    Rewriting the chain leaves the decision pointing at a product two
+    records still claim, so the load does not move. The collision is a
+    fact about the extracts and outranks anything the decision table
+    says about a record, which is the same precedence the cleansing
+    stages run in.
+    """
+    targets = {
+        ("GVP", "000000000000700301"): "100801",
+        # The same number a decision retires, and the GEP extract holds
+        # it twice - so it is both a chain and a collision.
+        ("GEP", "000000000000100801"): "100236",
+    }
+    outcome = cleanse.cleanse_materials(
+        [
+            _material("GVP", "000000000000700301", "ADJUVANT WAVRE"),
+            _material("GEP", "000000000000100801", "CORE ADJUVANT"),
+            _material("GEP", "000000000000100801", "CORE ADJUVANT II"),
+            _material("GEP", "000000000000100236", "CORE ANTIGEN"),
+        ],
+        harmonisation_targets=targets,
+    )
+
+    orphaned = outcome.issues_for("DQ-MAT-010")
+    assert [issue.key for issue in orphaned] == ["GVP/000000000000700301"]
+    assert "DQ-MAT-009" in orphaned[0].message
+    assert not outcome.issues_for("DQ-MAT-011")
+    assert outcome.harmonisation_holds["GVP/700301"].rule == "DQ-MAT-009"
+
+
 def test_a_master_record_held_twice_is_not_saved_by_a_decision():
     """A decision names the key once; the extract holds it twice.
 

@@ -526,25 +526,13 @@ def _reject_orphaned_merges(
     for row in orphaned:
         target = harmonisation_targets[_row_key(row)]
         result.rejected.append(row)
-        if target in retired:
-            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
-                target_product=target,
-                rule="DQ-MAT-011",
-                reason="which another decision itself retires",
-            )
-            result.issues.append(
-                _issue("DQ-MAT-011", Action.REJECT, "materials",
-                       source_key(row, "MATNR"), "MATNR",
-                       f"harmonised into product {target}, which another "
-                       "decision itself retires; a chain leaves the "
-                       "pipeline to decide what this material really "
-                       "became, so name the surviving product directly")
-            )
-            continue
-        # After the chain test: a decision naming a target that another
-        # decision retires is wrong wherever the number also collides,
-        # and saying so is the fix. A collision is not the record's
-        # fault and cannot be answered on the surviving master.
+        # The collision is tested first, for the reason the module's
+        # stage order gives: a collision is a fact about the extracts
+        # and outranks anything the decision table says about a record.
+        # A survivor number that is both claimed twice and retired by
+        # another decision needs both settled, but only one of them is
+        # what the record is waiting on - rewriting the chain leaves it
+        # pointing at a product that still cannot load.
         if target in collided:
             result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
                 target_product=target,
@@ -558,6 +546,21 @@ def _reject_orphaned_merges(
                        "because two products claim that number (DQ-MAT-009); "
                        "nothing on this record or on the surviving master is "
                        "wrong, and neither loads until that is settled")
+            )
+            continue
+        if target in retired:
+            result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
+                target_product=target,
+                rule="DQ-MAT-011",
+                reason="which another decision itself retires",
+            )
+            result.issues.append(
+                _issue("DQ-MAT-011", Action.REJECT, "materials",
+                       source_key(row, "MATNR"), "MATNR",
+                       f"harmonised into product {target}, which another "
+                       "decision itself retires; a chain leaves the "
+                       "pipeline to decide what this material really "
+                       "became, so name the surviving product directly")
             )
             continue
         result.harmonisation_holds[material_lookup_key(row)] = HarmonisationHold(
