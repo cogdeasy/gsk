@@ -8,7 +8,7 @@ ZGSK_FI_AP_AGEING,PROG,abap/src/fi/zgsk_fi_ap_ageing.prog.abap,FI,Global Financi
 ZGSK_SD_ORDER_VARIANTS,PROG,abap/src/sd/zgsk_sd_order_variants.prog.abap,SD,Commercial IT,non_gxp,wave1,140,medium,N/A,
 ZGSK_SD_CREDIT_CHECK,PROG,abap/src/sd/zgsk_sd_credit_check.prog.abap,SD,Commercial IT,non_gxp,wave1,5200,high,N/A,
 ZGSK_MD_CUSTOMER_SYNC,PROG,abap/src/md/zgsk_md_customer_sync.prog.abap,MDM,Enterprise Data & Analytics,gxp_relevant,wave0,930,critical,MDM-CVI-002,
-ZGSK_QM_BATCH_RELEASE,PROG,abap/src/qm/zgsk_qm_batch_release.prog.abap,QM,Global Quality IT,gxp_critical,wave0,4100,critical,QMS-014,
+ZGSK_QM_BATCH_RELEASE,PROG,abap/src/qm/zgsk_qm_batch_release.prog.abap,QM,Global Quality IT,gxp_critical,wave0,4100,critical,QMS-014,abap/remediated/zgsk_qm_batch_release.prog.abap
 ZGSK_PP_MRP_EXCEPTIONS,PROG,abap/src/pp/zgsk_pp_mrp_exceptions.prog.abap,PP,GSC Planning IT,non_gxp,wave1,6700,medium,N/A,
 ZGSK_CO_PRODUCT_COST,PROG,abap/src/co/zgsk_co_product_cost.prog.abap,CO,Global Financial Services,non_gxp,wave2,410,medium,N/A,
 ZGSK_IF_LABEL_PRINT,FUGR,abap/src/if/zgsk_if_label_print.fugr.abap,SD,GSC Manufacturing IT,gxp_critical,wave0,268000,critical,LBL-ANX11-001,

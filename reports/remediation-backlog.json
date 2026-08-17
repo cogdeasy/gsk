@@ -2,57 +2,55 @@
   "summary": {
     "objects_scanned": 16,
     "objects_with_findings": 16,
-    "objects_remediated": 2,
-    "objects_outstanding": 14,
+    "objects_remediated": 3,
+    "objects_outstanding": 13,
     "effective_loc": 1334,
-    "findings": 204,
-    "outstanding_findings": 173,
+    "findings": 203,
+    "outstanding_findings": 159,
     "by_severity": {
-      "blocker": 27,
-      "critical": 61,
-      "major": 55,
+      "blocker": 25,
+      "critical": 55,
+      "major": 49,
       "minor": 30
     },
     "by_rule": {
-      "SI-TECH-003": 42,
-      "SI-TECH-004": 24,
+      "SI-TECH-003": 40,
+      "SI-TECH-004": 21,
       "SI-TECH-005": 17,
-      "SI-MM-003": 15,
+      "SI-MM-003": 13,
       "SI-MD-002": 13,
-      "SI-GXP-001": 7,
+      "SI-GXP-001": 6,
       "SI-CO-001": 6,
       "SI-SD-002": 6,
       "SI-FI-001": 5,
       "SI-SD-001": 5,
-      "SI-QM-001": 4,
       "SI-MM-002": 4,
       "SI-MD-001": 4,
       "SI-FI-002": 4,
       "SI-PP-001": 4,
       "SI-TECH-007": 3,
       "SI-OM-001": 3,
-      "SI-TECH-001": 2,
       "SI-TECH-002": 2,
       "SI-TECH-006": 2,
       "SI-MM-001": 1
     },
     "by_wave": {
-      "wave0": 89,
+      "wave0": 75,
       "wave1": 71,
       "wave2": 13
     }
   },
   "effort": {
-    "raw_points": 804,
-    "weighted_points": 1138.5,
-    "engineer_days": 151.8,
-    "validation_overhead_days": 44.6
+    "raw_points": 738,
+    "weighted_points": 1006.5,
+    "engineer_days": 134.2,
+    "validation_overhead_days": 35.8
   },
   "cleared_effort": {
-    "raw_points": 141,
-    "weighted_points": 242.0,
-    "engineer_days": 32.3,
-    "validation_overhead_days": 13.5
+    "raw_points": 194,
+    "weighted_points": 348.0,
+    "engineer_days": 46.4,
+    "validation_overhead_days": 20.5
   },
   "remediated": [
     {
@@ -68,210 +66,16 @@
       "remediated_path": "abap/remediated/zgsk_mm_stock_overview.prog.abap",
       "wave": "wave0",
       "cleared_findings": 20
-    }
-  ],
-  "objects": [
+    },
     {
       "object_name": "ZGSK_QM_BATCH_RELEASE",
       "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
+      "remediated_path": "abap/remediated/zgsk_qm_batch_release.prog.abap",
       "wave": "wave0",
-      "gxp_class": "gxp_critical",
-      "owner": "Global Quality IT",
-      "validation_package": "QMS-014",
-      "effective_loc": 90,
-      "raw_effort_points": 66,
-      "weighted_effort_points": 132.0,
-      "by_severity": {
-        "blocker": 2,
-        "critical": 6,
-        "major": 6,
-        "minor": 0
-      },
-      "findings": [
-        {
-          "rule_id": "SI-GXP-001",
-          "title": "GxP object has no automated test evidence",
-          "category": "validation",
-          "severity": "critical",
-          "effort_points": 13,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 1,
-          "evidence": "gxp_critical",
-          "statement": "ZGSK_QM_BATCH_RELEASE (QMS-014)",
-          "guidance": "GxP-relevant and GxP-critical objects need documented test evidence per wave. Add an ABAP Unit test class and link it to the validation package so regression evidence is generated automatically.",
-          "sap_reference": "Computer system validation (GAMP 5 / Annex 11)"
-        },
-        {
-          "rule_id": "SI-QM-001",
-          "title": "Batch master table read directly",
-          "category": "data_model",
-          "severity": "major",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 14,
-          "evidence": "MCHA",
-          "statement": "TABLES: mcha, mch1, qals, qave.",
-          "guidance": "Read batch master through I_Batch / I_BatchCharcValue so the batch classification stays consistent with the S/4HANA batch model.",
-          "sap_reference": "Batch management data access"
-        },
-        {
-          "rule_id": "SI-TECH-003",
-          "title": "Obsolete ABAP syntax",
-          "category": "technical_debt",
-          "severity": "major",
-          "effort_points": 2,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 14,
-          "evidence": "TABLES:",
-          "statement": "TABLES: mcha, mch1, qals, qave.",
-          "guidance": "Header lines, OCCURS, MOVE and TABLES work areas are not permitted in clean-core code and block the move to ABAP for Cloud. Use inline declarations and work areas.",
-          "sap_reference": "ABAP for Cloud language restrictions"
-        },
-        {
-          "rule_id": "SI-MM-003",
-          "title": "Material number hard coded to 18 characters",
-          "category": "data_model",
-          "severity": "critical",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 16,
-          "evidence": "char18",
-          "statement": "TYPES: BEGIN OF ty_release, matnr TYPE char18, charg TYPE charg_d, werks TYPE werks_d, vfdat TYPE vfdat, hsdat TYPE hsdat, zustd TYPE char1, prueflos TYPE qp...",
-          "guidance": "MATNR is 40 characters on S/4HANA. Replace CHAR18 typing, LENGTH 18 declarations and (18) offsets with TYPE matnr.",
-          "sap_reference": "Extended material number field length"
-        },
-        {
-          "rule_id": "SI-TECH-003",
-          "title": "Obsolete ABAP syntax",
-          "category": "technical_debt",
-          "severity": "major",
-          "effort_points": 2,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 30,
-          "evidence": "WITH HEADER LINE",
-          "statement": "DATA: gt_rel TYPE STANDARD TABLE OF ty_release WITH HEADER LINE, gv_cnt TYPE i.",
-          "guidance": "Header lines, OCCURS, MOVE and TABLES work areas are not permitted in clean-core code and block the move to ABAP for Cloud. Use inline declarations and work areas.",
-          "sap_reference": "ABAP for Cloud language restrictions"
-        },
-        {
-          "rule_id": "SI-QM-001",
-          "title": "Batch master table read directly",
-          "category": "data_model",
-          "severity": "major",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 33,
-          "evidence": "MCHA",
-          "statement": "SELECT-OPTIONS: s_werks FOR mcha-werks OBLIGATORY, s_matnr FOR mcha-matnr, s_vfdat FOR mcha-vfdat.",
-          "guidance": "Read batch master through I_Batch / I_BatchCharcValue so the batch classification stays consistent with the S/4HANA batch model.",
-          "sap_reference": "Batch management data access"
-        },
-        {
-          "rule_id": "SI-QM-001",
-          "title": "Batch master table read directly",
-          "category": "data_model",
-          "severity": "major",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 49,
-          "evidence": "MCHA",
-          "statement": "SELECT matnr charg werks vfdat hsdat zustd FROM mcha INTO CORRESPONDING FIELDS OF TABLE gt_rel WHERE werks IN s_werks AND matnr IN s_matnr AND vfdat IN s_vfdat.",
-          "guidance": "Read batch master through I_Batch / I_BatchCharcValue so the batch classification stays consistent with the S/4HANA batch model.",
-          "sap_reference": "Batch management data access"
-        },
-        {
-          "rule_id": "SI-QM-001",
-          "title": "Batch master table read directly",
-          "category": "data_model",
-          "severity": "major",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 57,
-          "evidence": "MCH1",
-          "statement": "SELECT matnr charg vfdat hsdat zustd FROM mch1 APPENDING CORRESPONDING FIELDS OF TABLE gt_rel WHERE matnr IN s_matnr AND vfdat IN s_vfdat.",
-          "guidance": "Read batch master through I_Batch / I_BatchCharcValue so the batch classification stays consistent with the S/4HANA batch model.",
-          "sap_reference": "Batch management data access"
-        },
-        {
-          "rule_id": "SI-TECH-004",
-          "title": "Database read inside a loop",
-          "category": "technical_debt",
-          "severity": "critical",
-          "effort_points": 5,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 72,
-          "evidence": "SELECT",
-          "statement": "SELECT SINGLE prueflos FROM qals INTO gt_rel-prueflos WHERE matnr = gt_rel-matnr AND charg = gt_rel-charg AND werk = gt_rel-werks.",
-          "guidance": "Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.",
-          "sap_reference": "Code pushdown / HANA performance guidance"
-        },
-        {
-          "rule_id": "SI-TECH-004",
-          "title": "Database read inside a loop",
-          "category": "technical_debt",
-          "severity": "critical",
-          "effort_points": 5,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 79,
-          "evidence": "SELECT",
-          "statement": "SELECT SINGLE vcode vdatum vprueferq FROM qave INTO (gt_rel-vcode, gt_rel-vdatum, gt_rel-vprueferq) WHERE prueflos = gt_rel-prueflos.",
-          "guidance": "Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.",
-          "sap_reference": "Code pushdown / HANA performance guidance"
-        },
-        {
-          "rule_id": "SI-MM-003",
-          "title": "Material number hard coded to 18 characters",
-          "category": "data_model",
-          "severity": "critical",
-          "effort_points": 3,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 98,
-          "evidence": "char18",
-          "statement": "DATA: lv_count TYPE i, lv_matnr TYPE char18, lv_charg TYPE charg_d.",
-          "guidance": "MATNR is 40 characters on S/4HANA. Replace CHAR18 typing, LENGTH 18 declarations and (18) offsets with TYPE matnr.",
-          "sap_reference": "Extended material number field length"
-        },
-        {
-          "rule_id": "SI-TECH-001",
-          "title": "Native SQL used",
-          "category": "technical_debt",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 108,
-          "evidence": "EXEC SQL",
-          "statement": "EXEC SQL.",
-          "guidance": "EXEC SQL bypasses the database abstraction and will not survive the move to HANA under RISE. Replace with Open SQL or an AMDP method.",
-          "sap_reference": "HANA database migration"
-        },
-        {
-          "rule_id": "SI-TECH-001",
-          "title": "Native SQL used",
-          "category": "technical_debt",
-          "severity": "blocker",
-          "effort_points": 8,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 109,
-          "evidence": "ENDEXEC",
-          "statement": "SELECT COUNT(*) INTO :lv_count FROM ZGSK_COA_STAGING WHERE MATNR = :lv_matnr AND CHARG = :lv_charg AND STATUS = 'REL' ENDEXEC.",
-          "guidance": "EXEC SQL bypasses the database abstraction and will not survive the move to HANA under RISE. Replace with Open SQL or an AMDP method.",
-          "sap_reference": "HANA database migration"
-        },
-        {
-          "rule_id": "SI-TECH-004",
-          "title": "Database read inside a loop",
-          "category": "technical_debt",
-          "severity": "critical",
-          "effort_points": 5,
-          "path": "abap/src/qm/zgsk_qm_batch_release.prog.abap",
-          "line": 109,
-          "evidence": "SELECT",
-          "statement": "SELECT COUNT(*) INTO :lv_count FROM ZGSK_COA_STAGING WHERE MATNR = :lv_matnr AND CHARG = :lv_charg AND STATUS = 'REL' ENDEXEC.",
-          "guidance": "Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.",
-          "sap_reference": "Code pushdown / HANA performance guidance"
-        }
-      ]
-    },
+      "cleared_findings": 13
+    }
+  ],
+  "objects": [
     {
       "object_name": "ZGSK_MM_SERIALISATION_RECON",
       "path": "abap/src/mm/zgsk_mm_serialisation_recon.prog.abap",

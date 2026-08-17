@@ -9,19 +9,19 @@ Findings found and findings outstanding are different numbers: an object with a 
 | Metric | Value |
 | --- | --- |
 | Objects scanned | 16 |
-| Objects remediated | 2 |
-| Objects outstanding | 14 |
+| Objects remediated | 3 |
+| Objects outstanding | 13 |
 | Effective lines of code | 1334 |
-| Findings outstanding | 173 |
-| Findings - blocker | 27 |
-| Findings - critical | 61 |
-| Findings - major | 55 |
+| Findings outstanding | 159 |
+| Findings - blocker | 25 |
+| Findings - critical | 55 |
+| Findings - major | 49 |
 | Findings - minor | 30 |
-| Raw effort points | 804 |
-| Effort points incl. validation | 1138.5 |
-| Engineer-days outstanding | 151.8 |
-| of which GxP validation overhead | 44.6 |
-| Engineer-days cleared | 32.3 |
+| Raw effort points | 738 |
+| Effort points incl. validation | 1006.5 |
+| Engineer-days outstanding | 134.2 |
+| of which GxP validation overhead | 35.8 |
+| Engineer-days cleared | 46.4 |
 
 ## Remediated
 
@@ -31,12 +31,13 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 | --- | --- | --- | --- |
 | ZGSK_MM_BATCH_MOVEMENTS | wave0 | `abap/remediated/zgsk_mm_batch_movements.prog.abap` | 11 |
 | ZGSK_MM_STOCK_OVERVIEW | wave0 | `abap/remediated/zgsk_mm_stock_overview.prog.abap` | 20 |
+| ZGSK_QM_BATCH_RELEASE | wave0 | `abap/remediated/zgsk_qm_batch_release.prog.abap` | 13 |
 
 ## Findings by wave
 
 | Wave | Objects | Findings | Engineer-days |
 | --- | --- | --- | --- |
-| wave0 | 7 | 89 | 97.7 |
+| wave0 | 6 | 75 | 80.1 |
 | wave1 | 6 | 71 | 47.1 |
 | wave2 | 1 | 13 | 7.1 |
 
@@ -44,24 +45,22 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 
 | Rule | Title | Severity | Count |
 | --- | --- | --- | --- |
-| SI-TECH-003 | Obsolete ABAP syntax | major | 42 |
-| SI-TECH-004 | Database read inside a loop | critical | 24 |
+| SI-TECH-003 | Obsolete ABAP syntax | major | 40 |
+| SI-TECH-004 | Database read inside a loop | critical | 21 |
 | SI-TECH-005 | SELECT * used | minor | 17 |
-| SI-MM-003 | Material number hard coded to 18 characters | critical | 15 |
+| SI-MM-003 | Material number hard coded to 18 characters | critical | 13 |
 | SI-MD-002 | Customer or vendor master read directly from the legacy table | minor | 13 |
-| SI-GXP-001 | GxP object has no automated test evidence | critical | 7 |
+| SI-GXP-001 | GxP object has no automated test evidence | critical | 6 |
 | SI-CO-001 | CO totals or line item table accessed directly | blocker | 6 |
 | SI-SD-002 | Classic SD credit management objects used | critical | 6 |
 | SI-FI-001 | FI index or totals table accessed directly | blocker | 5 |
 | SI-SD-001 | Sales document status tables VBUK/VBUP accessed | blocker | 5 |
-| SI-QM-001 | Batch master table read directly | major | 4 |
 | SI-MM-002 | Material document tables MKPF/MSEG accessed directly | blocker | 4 |
 | SI-MD-001 | Customer or vendor master written outside Business Partner | blocker | 4 |
 | SI-FI-002 | BSEG/BKPF read where the universal journal should be used | major | 4 |
 | SI-PP-001 | Classic MRP list tables accessed | critical | 4 |
 | SI-TECH-007 | COMMIT WORK inside a loop | major | 3 |
 | SI-OM-001 | NAST based output determination used | critical | 3 |
-| SI-TECH-001 | Native SQL used | blocker | 2 |
 | SI-TECH-002 | Obsolete function module called | critical | 2 |
 | SI-TECH-006 | CLIENT SPECIFIED used | major | 2 |
 | SI-MM-001 | Aggregate stock table accessed directly | blocker | 1 |
@@ -70,45 +69,21 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 
 | # | Object | Wave | GxP | Owner | Blocker | Critical | Major | Minor | Engineer-days |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | ZGSK_QM_BATCH_RELEASE | wave0 | gxp_critical | Global Quality IT | 2 | 6 | 6 | 0 | 17.6 |
-| 2 | ZGSK_MM_SERIALISATION_RECON | wave0 | gxp_critical | GSC Serialisation Programme | 5 | 3 | 3 | 2 | 18.4 |
-| 3 | ZGSK_MD_CUSTOMER_SYNC | wave0 | gxp_relevant | Enterprise Data & Analytics | 4 | 2 | 4 | 5 | 17.6 |
-| 4 | ZGSK_FI_ICT_MARGIN | wave0 | non_gxp | Global Financial Services | 4 | 1 | 7 | 2 | 8.7 |
-| 5 | ZGSK_IF_LABEL_PRINT | wave0 | gxp_critical | GSC Manufacturing IT | 0 | 7 | 3 | 2 | 18.9 |
-| 6 | ZGSK_IF_MES_CONFIRMATION | wave0 | gxp_critical | GSC Manufacturing IT | 0 | 3 | 4 | 2 | 8.3 |
-| 7 | ZGSK_COMMON_UTILS | wave0 | gxp_relevant | ERP Competency Centre | 0 | 7 | 5 | 0 | 8.2 |
-| 8 | ZXVEDU01_SALES_ORDER | wave1 | gxp_relevant | Commercial IT | 2 | 7 | 1 | 3 | 13.2 |
-| 9 | ZGSK_FI_AP_AGEING | wave1 | non_gxp | Global Financial Services | 3 | 1 | 6 | 2 | 6.0 |
-| 10 | ZGSK_SD_ORDER_VARIANTS | wave1 | non_gxp | Commercial IT | 3 | 2 | 3 | 1 | 4.0 |
-| 11 | ZGSK_MM_ARIBA_PO_SYNC | wave1 | non_gxp | Global Procurement IT | 0 | 5 | 4 | 4 | 5.1 |
-| 12 | ZGSK_SD_CREDIT_CHECK | wave1 | non_gxp | Commercial IT | 0 | 8 | 2 | 2 | 11.7 |
-| 13 | ZGSK_PP_MRP_EXCEPTIONS | wave1 | non_gxp | GSC Planning IT | 0 | 7 | 3 | 2 | 7.1 |
-| 14 | ZGSK_CO_PRODUCT_COST | wave2 | non_gxp | Global Financial Services | 4 | 2 | 4 | 3 | 7.1 |
+| 1 | ZGSK_MM_SERIALISATION_RECON | wave0 | gxp_critical | GSC Serialisation Programme | 5 | 3 | 3 | 2 | 18.4 |
+| 2 | ZGSK_MD_CUSTOMER_SYNC | wave0 | gxp_relevant | Enterprise Data & Analytics | 4 | 2 | 4 | 5 | 17.6 |
+| 3 | ZGSK_FI_ICT_MARGIN | wave0 | non_gxp | Global Financial Services | 4 | 1 | 7 | 2 | 8.7 |
+| 4 | ZGSK_IF_LABEL_PRINT | wave0 | gxp_critical | GSC Manufacturing IT | 0 | 7 | 3 | 2 | 18.9 |
+| 5 | ZGSK_IF_MES_CONFIRMATION | wave0 | gxp_critical | GSC Manufacturing IT | 0 | 3 | 4 | 2 | 8.3 |
+| 6 | ZGSK_COMMON_UTILS | wave0 | gxp_relevant | ERP Competency Centre | 0 | 7 | 5 | 0 | 8.2 |
+| 7 | ZXVEDU01_SALES_ORDER | wave1 | gxp_relevant | Commercial IT | 2 | 7 | 1 | 3 | 13.2 |
+| 8 | ZGSK_FI_AP_AGEING | wave1 | non_gxp | Global Financial Services | 3 | 1 | 6 | 2 | 6.0 |
+| 9 | ZGSK_SD_ORDER_VARIANTS | wave1 | non_gxp | Commercial IT | 3 | 2 | 3 | 1 | 4.0 |
+| 10 | ZGSK_MM_ARIBA_PO_SYNC | wave1 | non_gxp | Global Procurement IT | 0 | 5 | 4 | 4 | 5.1 |
+| 11 | ZGSK_SD_CREDIT_CHECK | wave1 | non_gxp | Commercial IT | 0 | 8 | 2 | 2 | 11.7 |
+| 12 | ZGSK_PP_MRP_EXCEPTIONS | wave1 | non_gxp | GSC Planning IT | 0 | 7 | 3 | 2 | 7.1 |
+| 13 | ZGSK_CO_PRODUCT_COST | wave2 | non_gxp | Global Financial Services | 4 | 2 | 4 | 3 | 7.1 |
 
 ## Object detail
-
-### ZGSK_QM_BATCH_RELEASE
-
-- Source: `abap/src/qm/zgsk_qm_batch_release.prog.abap`
-- Wave: wave0 | GxP class: gxp_critical
-- Owner: Global Quality IT | Validation package: QMS-014 | 4100 executions/month
-
-| Line | Rule | Severity | Evidence | Statement |
-| --- | --- | --- | --- | --- |
-| 1 | SI-GXP-001 | critical | `gxp_critical` | `ZGSK_QM_BATCH_RELEASE (QMS-014)` |
-| 14 | SI-QM-001 | major | `MCHA` | `TABLES: mcha, mch1, qals, qave.` |
-| 14 | SI-TECH-003 | major | `TABLES:` | `TABLES: mcha, mch1, qals, qave.` |
-| 16 | SI-MM-003 | critical | `char18` | `TYPES: BEGIN OF ty_release, matnr TYPE char18, charg TYPE charg_d, werks TYPE werks_d, vfdat TYPE vfdat, hsdat TYPE hsdat, zustd TYPE char1, prueflos TYPE qp...` |
-| 30 | SI-TECH-003 | major | `WITH HEADER LINE` | `DATA: gt_rel TYPE STANDARD TABLE OF ty_release WITH HEADER LINE, gv_cnt TYPE i.` |
-| 33 | SI-QM-001 | major | `MCHA` | `SELECT-OPTIONS: s_werks FOR mcha-werks OBLIGATORY, s_matnr FOR mcha-matnr, s_vfdat FOR mcha-vfdat.` |
-| 49 | SI-QM-001 | major | `MCHA` | `SELECT matnr charg werks vfdat hsdat zustd FROM mcha INTO CORRESPONDING FIELDS OF TABLE gt_rel WHERE werks IN s_werks AND matnr IN s_matnr AND vfdat IN s_vfdat.` |
-| 57 | SI-QM-001 | major | `MCH1` | `SELECT matnr charg vfdat hsdat zustd FROM mch1 APPENDING CORRESPONDING FIELDS OF TABLE gt_rel WHERE matnr IN s_matnr AND vfdat IN s_vfdat.` |
-| 72 | SI-TECH-004 | critical | `SELECT` | `SELECT SINGLE prueflos FROM qals INTO gt_rel-prueflos WHERE matnr = gt_rel-matnr AND charg = gt_rel-charg AND werk = gt_rel-werks.` |
-| 79 | SI-TECH-004 | critical | `SELECT` | `SELECT SINGLE vcode vdatum vprueferq FROM qave INTO (gt_rel-vcode, gt_rel-vdatum, gt_rel-vprueferq) WHERE prueflos = gt_rel-prueflos.` |
-| 98 | SI-MM-003 | critical | `char18` | `DATA: lv_count TYPE i, lv_matnr TYPE char18, lv_charg TYPE charg_d.` |
-| 108 | SI-TECH-001 | blocker | `EXEC SQL` | `EXEC SQL.` |
-| 109 | SI-TECH-001 | blocker | `ENDEXEC` | `SELECT COUNT(*) INTO :lv_count FROM ZGSK_COA_STAGING WHERE MATNR = :lv_matnr AND CHARG = :lv_charg AND STATUS = 'REL' ENDEXEC.` |
-| 109 | SI-TECH-004 | critical | `SELECT` | `SELECT COUNT(*) INTO :lv_count FROM ZGSK_COA_STAGING WHERE MATNR = :lv_matnr AND CHARG = :lv_charg AND STATUS = 'REL' ENDEXEC.` |
 
 ### ZGSK_MM_SERIALISATION_RECON
 
@@ -394,11 +369,17 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 - SAP topic: Computer system validation (GAMP 5 / Annex 11)
 - Target: GxP-relevant and GxP-critical objects need documented test evidence per wave. Add an ABAP Unit test class and link it to the validation package so regression evidence is generated automatically.
 
-### SI-QM-001 - Batch master table read directly
+### SI-MM-001 - Aggregate stock table accessed directly
 
-- Severity: major
-- SAP topic: Batch management data access
-- Target: Read batch master through I_Batch / I_BatchCharcValue so the batch classification stays consistent with the S/4HANA batch model.
+- Severity: blocker
+- SAP topic: MM-IM: material inventory management data model
+- Target: Stock quantity fields in the aggregate tables are not maintained on S/4HANA. Read stock from the released CDS views (I_MaterialStock and the NSDM compatibility views) which are backed by MATDOC.
+
+### SI-MM-002 - Material document tables MKPF/MSEG accessed directly
+
+- Severity: blocker
+- SAP topic: MM-IM: MATDOC single document table
+- Target: MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.
 
 ### SI-TECH-003 - Obsolete ABAP syntax
 
@@ -412,35 +393,17 @@ Objects with an S/4HANA implementation and ABAP Unit evidence. The ECC source is
 - SAP topic: Extended material number field length
 - Target: MATNR is 40 characters on S/4HANA. Replace CHAR18 typing, LENGTH 18 declarations and (18) offsets with TYPE matnr.
 
-### SI-TECH-004 - Database read inside a loop
-
-- Severity: critical
-- SAP topic: Code pushdown / HANA performance guidance
-- Target: Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.
-
-### SI-TECH-001 - Native SQL used
-
-- Severity: blocker
-- SAP topic: HANA database migration
-- Target: EXEC SQL bypasses the database abstraction and will not survive the move to HANA under RISE. Replace with Open SQL or an AMDP method.
-
-### SI-MM-001 - Aggregate stock table accessed directly
-
-- Severity: blocker
-- SAP topic: MM-IM: material inventory management data model
-- Target: Stock quantity fields in the aggregate tables are not maintained on S/4HANA. Read stock from the released CDS views (I_MaterialStock and the NSDM compatibility views) which are backed by MATDOC.
-
-### SI-MM-002 - Material document tables MKPF/MSEG accessed directly
-
-- Severity: blocker
-- SAP topic: MM-IM: MATDOC single document table
-- Target: MKPF and MSEG are replaced by MATDOC. Use I_MaterialDocumentItem or the NSDM_MIG compatibility views; do not assume MKPF/MSEG field semantics or indexes.
-
 ### SI-TECH-005 - SELECT * used
 
 - Severity: minor
 - SAP topic: Code pushdown / HANA performance guidance
 - Target: Column stores penalise wide reads. Select only the fields the program uses.
+
+### SI-TECH-004 - Database read inside a loop
+
+- Severity: critical
+- SAP topic: Code pushdown / HANA performance guidance
+- Target: Nested SELECTs dominate runtime on HANA and will not meet the wave cutover batch windows. Rewrite as a set based read with a join or FOR ALL ENTRIES.
 
 ### SI-MD-002 - Customer or vendor master read directly from the legacy table
 
