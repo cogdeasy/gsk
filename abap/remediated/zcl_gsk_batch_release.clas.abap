@@ -95,12 +95,26 @@ CLASS zcl_gsk_batch_release DEFINITION
 
     DATA mo_release_source TYPE REF TO zif_gsk_batch_release_source.
 
-    "! Latest decision per batch. The ECC report took whichever
-    "! inspection lot the database returned first, which is not
-    "! reproducible for a batch inspected more than once.
-    METHODS latest_decisions
-      IMPORTING it_decision            TYPE tt_usage_decision
-      RETURNING VALUE(rt_decision)     TYPE tt_usage_decision.
+    "! Latest decision per batch and plant. The ECC report keyed its
+    "! inspection lot read on the plant as well, and took whichever
+    "! lot the database returned first, which is not reproducible for a
+    "! batch inspected more than once.
+    METHODS latest_per_plant
+      IMPORTING it_decision        TYPE tt_usage_decision
+      RETURNING VALUE(rt_decision) TYPE tt_usage_decision.
+
+    "! Latest decision per batch across plants, for batches held at
+    "! material level: those carry no identifying plant, so there is no
+    "! plant to match on.
+    METHODS latest_across_plants
+      IMPORTING it_decision        TYPE tt_usage_decision
+      RETURNING VALUE(rt_decision) TYPE tt_usage_decision.
+
+    METHODS decision_for
+      IMPORTING it_per_plant       TYPE tt_usage_decision
+                it_across_plants   TYPE tt_usage_decision
+                is_batch           TYPE ty_batch
+      RETURNING VALUE(rs_decision) TYPE ty_usage_decision.
 
 ENDCLASS.
 
@@ -131,8 +145,9 @@ CLASS zcl_gsk_batch_release IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lt_decision) = latest_decisions(
-      mo_release_source->select_usage_decisions( lt_batch ) ).
+    DATA(lt_decision) = mo_release_source->select_usage_decisions( lt_batch ).
+    DATA(lt_per_plant) = latest_per_plant( lt_decision ).
+    DATA(lt_any_plant) = latest_across_plants( lt_decision ).
 
     DATA(lt_coa) = mo_release_source->select_released_coa( lt_batch ).
 
@@ -146,14 +161,14 @@ CLASS zcl_gsk_batch_release IMPLEMENTATION.
                       restricted_use   = ls_batch-restricted_use )
              TO rt_release ASSIGNING FIELD-SYMBOL(<ls_line>).
 
-      ASSIGN lt_decision[ material = ls_batch-material
-                          batch    = ls_batch-batch ] TO FIELD-SYMBOL(<ls_decision>).
-      IF sy-subrc = 0.
-        <ls_line>-inspection_lot      = <ls_decision>-inspection_lot.
-        <ls_line>-usage_decision_code = <ls_decision>-usage_decision_code.
-        <ls_line>-usage_decision_date = <ls_decision>-usage_decision_date.
-        <ls_line>-usage_decision_by   = <ls_decision>-usage_decision_by.
-      ENDIF.
+      DATA(ls_decision) = decision_for( it_per_plant     = lt_per_plant
+                                        it_across_plants = lt_any_plant
+                                        is_batch         = ls_batch ).
+
+      <ls_line>-inspection_lot      = ls_decision-inspection_lot.
+      <ls_line>-usage_decision_code = ls_decision-usage_decision_code.
+      <ls_line>-usage_decision_date = ls_decision-usage_decision_date.
+      <ls_line>-usage_decision_by   = ls_decision-usage_decision_by.
 
       ASSIGN lt_coa[ material = ls_batch-material
                      batch    = ls_batch-batch ] TO FIELD-SYMBOL(<ls_coa>).
@@ -175,12 +190,39 @@ CLASS zcl_gsk_batch_release IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD latest_decisions.
+  METHOD latest_per_plant.
+
+    rt_decision = it_decision.
+    SORT rt_decision BY material batch plant usage_decision_date DESCENDING
+                        inspection_lot DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM rt_decision COMPARING material batch plant.
+
+  ENDMETHOD.
+
+  METHOD latest_across_plants.
 
     rt_decision = it_decision.
     SORT rt_decision BY material batch usage_decision_date DESCENDING
                         inspection_lot DESCENDING.
     DELETE ADJACENT DUPLICATES FROM rt_decision COMPARING material batch.
+
+  ENDMETHOD.
+
+  METHOD decision_for.
+
+    IF is_batch-plant IS INITIAL.
+      rs_decision = VALUE #( it_across_plants[ material = is_batch-material
+                                               batch    = is_batch-batch ]
+                             OPTIONAL ).
+      RETURN.
+    ENDIF.
+
+    " A batch number can exist in more than one plant, so a decision
+    " taken at another site must not be reported against this one.
+    rs_decision = VALUE #( it_per_plant[ material = is_batch-material
+                                         batch    = is_batch-batch
+                                         plant    = is_batch-plant ]
+                           OPTIONAL ).
 
   ENDMETHOD.
 
@@ -257,7 +299,7 @@ CLASS zcl_gsk_batch_release_src IMPLEMENTATION.
              manufacturedate               AS manufacture_date,
              matlbatchisinrstrcdusestock   AS restricted_use
       WHERE ( batchidentifyingplant IN @it_plant
-              OR batchidentifyingplant = @space )
+              OR batchidentifyingplant IS INITIAL )
         AND material                IN @it_material
         AND shelflifeexpirationdate IN @it_expiry_date
       INTO TABLE @rt_batch.
@@ -283,16 +325,31 @@ CLASS zcl_gsk_batch_release_src IMPLEMENTATION.
 
   METHOD zif_gsk_batch_release_source~select_released_coa.
 
+    " FOR ALL ENTRIES does not combine with an aggregate or GROUP BY,
+    " so the released rows are read in one go and counted here.
     SELECT FROM zgsk_coa_staging
-      FIELDS matnr      AS material,
-             charg      AS batch,
-             COUNT( * ) AS released_documents
+      FIELDS matnr AS material,
+             charg AS batch
       FOR ALL ENTRIES IN @it_batch
       WHERE matnr  = @it_batch-material
         AND charg  = @it_batch-batch
         AND status = 'REL'
-      GROUP BY matnr, charg
-      INTO TABLE @rt_coa.
+      INTO TABLE @DATA(lt_released).
+
+    LOOP AT lt_released INTO DATA(ls_released).
+
+      ASSIGN rt_coa[ material = ls_released-material
+                     batch    = ls_released-batch ] TO FIELD-SYMBOL(<ls_coa>).
+
+      IF sy-subrc <> 0.
+        APPEND VALUE #( material = ls_released-material
+                        batch    = ls_released-batch ) TO rt_coa
+               ASSIGNING <ls_coa>.
+      ENDIF.
+
+      <ls_coa>-released_documents += 1.
+
+    ENDLOOP.
 
   ENDMETHOD.
 

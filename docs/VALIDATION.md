@@ -32,7 +32,7 @@ An object is not done until all four exist:
    `<object>.testclasses.abap`, running against a test double rather
    than client data so the run is reproducible in any client. Rule
    `SI-GXP-001` fails any GxP object without one; there are currently
-   9 such objects.
+   8 such objects.
 3. **Review record** - the pull request. One remediated object per PR,
    reviewed by the object owner named in the inventory.
 4. **Regression run** - the object's tests green in CI on the wave

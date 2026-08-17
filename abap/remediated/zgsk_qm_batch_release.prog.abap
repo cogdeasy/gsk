@@ -15,8 +15,9 @@
 *&               the same read.
 *&   SI-MM-003   CHAR18 material typing replaced by TYPE matnr.
 *&   SI-TECH-001 the native SQL count over ZGSK_COA_STAGING is now one
-*&               grouped Open SQL read; the staging table is a custom
-*&               table and survives the conversion unchanged.
+*&               set based Open SQL read counted in ABAP; the staging
+*&               table is a custom table and survives the conversion
+*&               unchanged.
 *&   SI-TECH-003 header lines and TABLES work areas removed.
 *&   SI-TECH-004 the per-batch reads of QALS and QAVE inside LOOP AT
 *&               gt_rel, and the per-batch certificate count, are three

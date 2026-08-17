@@ -54,6 +54,7 @@ CLASS ltcl_batch_release DEFINITION FOR TESTING
     METHODS held_coa_is_not_released FOR TESTING RAISING cx_static_check.
     METHODS latest_decision_reported FOR TESTING RAISING cx_static_check.
     METHODS material_level_batch_kept FOR TESTING RAISING cx_static_check.
+    METHODS decision_matched_by_plant FOR TESTING RAISING cx_static_check.
     METHODS batch_without_lot_is_held FOR TESTING RAISING cx_static_check.
     METHODS missing_coa_filter        FOR TESTING RAISING cx_static_check.
     METHODS result_is_sorted          FOR TESTING RAISING cx_static_check.
@@ -69,10 +70,10 @@ CLASS ltcl_batch_release IMPLEMENTATION.
     mo_cut    = NEW zcl_gsk_batch_release( mo_double ).
 
     " B24001 has a released certificate and two usage decisions, the
-    " second one taken after a retest. B24002 has a certificate that is
-    " still in progress. B24003 is held at material level, so I_Batch
-    " returns it without an identifying plant. B24004 has no inspection
-    " lot at all.
+    " second one taken after a retest. B24002 has no released
+    " certificate. B24003 is held at material level, so I_Batch returns
+    " it without an identifying plant. B24004 has no inspection lot at
+    " all.
     mo_double->mt_batch = VALUE #(
       ( material = 'FG-000123' batch = 'B24001' plant = 'GB21'
         expiry_date = '20270331' manufacture_date = '20260301' )
@@ -97,9 +98,10 @@ CLASS ltcl_batch_release IMPLEMENTATION.
         batch = 'B24003' plant = '' usage_decision_code = 'A1'
         usage_decision_date = '20260120' usage_decision_by = 'QPBE01' ) ).
 
+    " The source counts released certificates only, so a batch whose
+    " staging rows are all still in progress has no row here at all.
     mo_double->mt_coa = VALUE #(
       ( material = 'FG-000123' batch = 'B24001' released_documents = 2 )
-      ( material = 'FG-000123' batch = 'B24002' released_documents = 0 )
       ( material = 'API-00045' batch = 'B24003' released_documents = 1 ) ).
 
   ENDMETHOD.
@@ -145,8 +147,8 @@ CLASS ltcl_batch_release IMPLEMENTATION.
 
     DATA(lt_result) = mo_cut->read_worklist( plant_range( ) ).
 
-    " A staging row exists but nothing on it is released, which is the
-    " case the native SQL count in the ECC report covered.
+    " Nothing on the certificate is released, which is the case the
+    " native SQL count in the ECC report covered.
     cl_abap_unit_assert=>assert_equals(
       act = lt_result[ batch = 'B24002' ]-release_status
       exp = zcl_gsk_batch_release=>co_status_coa_missing
@@ -176,6 +178,41 @@ CLASS ltcl_batch_release IMPLEMENTATION.
       act = lt_result[ batch = 'B24003' ]-usage_decision_code
       exp = 'A1'
       msg = 'A batch held at material level must stay in the worklist' ).
+
+  ENDMETHOD.
+
+  METHOD decision_matched_by_plant.
+
+    " The same batch number exists at two sites. The Belgian site took a
+    " later decision on its own batch, which must not be reported
+    " against the British one.
+    APPEND VALUE #( material = 'FG-000123' batch = 'B24001' plant = 'BE31'
+                    expiry_date = '20270331' manufacture_date = '20260301' )
+           TO mo_double->mt_batch.
+
+    APPEND VALUE #( inspection_lot = '010000000410' material = 'FG-000123'
+                    batch = 'B24001' plant = 'BE31' usage_decision_code = 'R1'
+                    usage_decision_date = '20260401' usage_decision_by = 'QPBE02' )
+           TO mo_double->mt_decision.
+
+    DATA(lt_result) = mo_cut->read_worklist(
+      VALUE #( ( sign = 'I' option = 'EQ' low = 'GB21' )
+               ( sign = 'I' option = 'EQ' low = 'BE31' ) ) ).
+
+    DATA(ls_gb) = lt_result[ plant = 'GB21' material = 'FG-000123' batch = 'B24001' ].
+    DATA(ls_be) = lt_result[ plant = 'BE31' material = 'FG-000123' batch = 'B24001' ].
+
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_gb-inspection_lot
+      exp = '010000000188'
+      msg = 'The British batch must keep its own inspection lot' ).
+    cl_abap_unit_assert=>assert_equals( act = ls_gb-usage_decision_code exp = 'A3' ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = ls_be-inspection_lot
+      exp = '010000000410'
+      msg = 'The Belgian batch must report the decision taken there' ).
+    cl_abap_unit_assert=>assert_equals( act = ls_be-usage_decision_code exp = 'R1' ).
 
   ENDMETHOD.
 
