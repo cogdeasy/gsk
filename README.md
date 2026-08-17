@@ -58,10 +58,10 @@ Current state of the estate:
 | | |
 | --- | --- |
 | Objects scanned | 16 |
-| Objects remediated | 2 |
-| Findings outstanding | 173 (27 blocker, 61 critical, 55 major, 30 minor) |
-| Estimated effort | 152 engineer-days, of which 45 is GxP validation overhead |
-| Cleared so far | 32 engineer-days |
+| Objects remediated | 3 |
+| Findings outstanding | 159 (25 blocker, 55 critical, 49 major, 30 minor) |
+| Estimated effort | 134 engineer-days, of which 36 is GxP validation overhead |
+| Cleared so far | 46 engineer-days |
 
 An object leaves the backlog when `estate/inventory.csv` names its
 S/4HANA successor in `remediated_path`. The ECC source stays in

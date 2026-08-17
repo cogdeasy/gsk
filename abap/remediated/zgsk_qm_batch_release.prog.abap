@@ -26,11 +26,20 @@
 *&   SI-GXP-001  ABAP Unit tests in
 *&               zgsk_qm_batch_release.testclasses.abap.
 *&
-*& One behavioural change, flagged for the validation package: where a
-*& batch carries more than one inspection lot the ECC report reported
-*& whichever lot the database returned first. The worklist now reports
-*& the most recent usage decision, so the same batch gives the same
-*& answer on every run.
+*& Two behavioural changes, flagged for the validation package:
+*&
+*&   1. Where a batch carries more than one inspection lot the ECC
+*&      report reported whichever lot the database returned first. The
+*&      worklist now reports the most recent usage decision for the
+*&      batch in that plant, so the same batch gives the same answer on
+*&      every run.
+*&   2. Batches held at material level carry no identifying plant, in
+*&      S/4HANA as in the ECC MCH1 append, and are still listed
+*&      whatever the plant selection is. Their usage decision is now
+*&      matched on material and batch alone, so such a batch can show a
+*&      decision taken in a plant outside the selection; the ECC report
+*&      keyed its QALS read on the batch's (empty) plant and therefore
+*&      showed no decision at all for them.
 *&
 *& Object owner : Global Quality IT
 *& GxP class    : GxP-critical (Annex 16 batch certification support)

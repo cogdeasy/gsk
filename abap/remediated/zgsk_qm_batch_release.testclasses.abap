@@ -98,11 +98,11 @@ CLASS ltcl_batch_release IMPLEMENTATION.
         batch = 'B24003' plant = '' usage_decision_code = 'A1'
         usage_decision_date = '20260120' usage_decision_by = 'QPBE01' ) ).
 
-    " The source counts released certificates only, so a batch whose
+    " The source returns released certificates only, so a batch whose
     " staging rows are all still in progress has no row here at all.
     mo_double->mt_coa = VALUE #(
-      ( material = 'FG-000123' batch = 'B24001' released_documents = 2 )
-      ( material = 'API-00045' batch = 'B24003' released_documents = 1 ) ).
+      ( material = 'FG-000123' batch = 'B24001' coa_released = abap_true )
+      ( material = 'API-00045' batch = 'B24003' coa_released = abap_true ) ).
 
   ENDMETHOD.
 

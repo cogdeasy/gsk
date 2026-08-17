@@ -15,7 +15,7 @@ make setup
 make scan
 ```
 
-16 custom objects, 173 findings outstanding, 27 of them blockers, plus
+16 custom objects, 159 findings outstanding, 25 of them blockers, plus
 what has already been cleared. Then the point that matters - it is not
 a flat list:
 

@@ -47,10 +47,14 @@ CLASS zcl_gsk_batch_release DEFINITION
            END OF ty_usage_decision,
            tt_usage_decision TYPE STANDARD TABLE OF ty_usage_decision WITH EMPTY KEY.
 
+    " The ECC report counted the released certificates and then only
+    " asked whether there was one, so the flag is all the worklist
+    " needs and all the staging read can honestly deliver: FOR ALL
+    " ENTRIES removes duplicate rows from its result set.
     TYPES: BEGIN OF ty_coa,
-             material           TYPE matnr,
-             batch              TYPE charg_d,
-             released_documents TYPE i,
+             material     TYPE matnr,
+             batch        TYPE charg_d,
+             coa_released TYPE abap_bool,
            END OF ty_coa,
            tt_coa TYPE STANDARD TABLE OF ty_coa WITH EMPTY KEY.
 
@@ -173,7 +177,7 @@ CLASS zcl_gsk_batch_release IMPLEMENTATION.
       ASSIGN lt_coa[ material = ls_batch-material
                      batch    = ls_batch-batch ] TO FIELD-SYMBOL(<ls_coa>).
       IF sy-subrc = 0.
-        <ls_line>-coa_released = xsdbool( <ls_coa>-released_documents > 0 ).
+        <ls_line>-coa_released = <ls_coa>-coa_released.
       ENDIF.
 
       <ls_line>-release_status = COND #( WHEN <ls_line>-coa_released = abap_true
@@ -325,31 +329,19 @@ CLASS zcl_gsk_batch_release_src IMPLEMENTATION.
 
   METHOD zif_gsk_batch_release_source~select_released_coa.
 
-    " FOR ALL ENTRIES does not combine with an aggregate or GROUP BY,
-    " so the released rows are read in one go and counted here.
+    " One row per batch that has at least one released certificate:
+    " FOR ALL ENTRIES removes duplicates from its result set, and it
+    " does not combine with an aggregate or GROUP BY either, so the
+    " existence of a row is the answer rather than a count of rows.
     SELECT FROM zgsk_coa_staging
       FIELDS matnr AS material,
-             charg AS batch
+             charg AS batch,
+             @abap_true AS coa_released
       FOR ALL ENTRIES IN @it_batch
       WHERE matnr  = @it_batch-material
         AND charg  = @it_batch-batch
         AND status = 'REL'
-      INTO TABLE @DATA(lt_released).
-
-    LOOP AT lt_released INTO DATA(ls_released).
-
-      ASSIGN rt_coa[ material = ls_released-material
-                     batch    = ls_released-batch ] TO FIELD-SYMBOL(<ls_coa>).
-
-      IF sy-subrc <> 0.
-        APPEND VALUE #( material = ls_released-material
-                        batch    = ls_released-batch ) TO rt_coa
-               ASSIGNING <ls_coa>.
-      ENDIF.
-
-      <ls_coa>-released_documents += 1.
-
-    ENDLOOP.
+      INTO TABLE @rt_coa.
 
   ENDMETHOD.
 
